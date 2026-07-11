@@ -164,6 +164,7 @@
   .cell .num{font-size:13px; font-weight:700;}
   .cell.out{opacity:.45;}
   .cell.custody{background:var(--custody); border-color:var(--custody-line);}
+  .cell.jobbresa{background-image:repeating-linear-gradient(135deg, rgba(15,118,110,.08) 0 6px, transparent 6px 12px); border-color:#0f766e;}
   .cell.today{border-color:var(--accent); border-width:2px;}
   .cell .heart{position:absolute; top:3px; right:5px; font-size:10px;}
   .cell .marks{display:flex; flex-wrap:wrap; gap:3px; align-items:center; margin-top:auto;}
@@ -673,6 +674,13 @@ const App = {
         cleanTasks.map(t => '<div class="task"><span class="txt">' + esc(t.name) + '</span></div>').join('') + '</div>'
       : '';
 
+    const trips = sharedEventsOn(ds).filter(e => e.type === 'jobbresa');
+    const tripInfo = trips.length
+      ? '<div class="sheet-sec"><h4>🧳 Jobbresa</h4>' +
+        trips.map(e => '<div class="task"><span class="txt">' + esc(e.label || 'Jobbresa') + '</span></div>').join('') +
+        '<p class="small muted" style="margin:6px 0 0">Läggs till/ändras i Skrivbordet.</p></div>'
+      : '';
+
     openModal(
       '<div class="sheet-head"><h3>' + humanDate(d) + ' · v.' + isoWeekInfo(d).week + '</h3>' +
       '<button class="close" onclick="App.closeModal()">✕</button></div>' +
@@ -697,6 +705,7 @@ const App = {
       '<button class="btn small" onclick="App.addDayActivity(\'' + ds + '\')">Lägg till</button></div>' +
       '</div>' +
 
+      tripInfo +
       cleanInfo
     );
   },
@@ -1039,6 +1048,15 @@ function renderToday(){
     ' &nbsp;·&nbsp; <a href="#" onclick="App.go(\'kal\');return false" style="color:var(--accent);font-weight:700">Ändra i kalendern</a></p>' +
     '</div>';
 
+  /* Jobbresa (från Skrivbordet) */
+  const tripToday = sharedEventsOn(ts).some(e => e.type === 'jobbresa');
+  const tripTomorrow = sharedEventsOn(fmtDate(tomorrow)).some(e => e.type === 'jobbresa');
+  if(tripToday || tripTomorrow){
+    html += '<div class="reminder"><span class="ic">🧳</span><span>' +
+      (tripToday ? 'Du är på jobbresa idag.' : 'Du är på jobbresa imorgon.') +
+      ' <span class="muted" style="font-weight:600">(från Skrivbordet)</span></span></div>';
+  }
+
   /* Påminnelser */
   const rems = gympaReminders(state.children);
   if(rems.length){
@@ -1123,6 +1141,8 @@ function renderCal(){
       const classes = ['cell'];
       if(d.getMonth() !== m) classes.push('out');
       if(hasKids(ds)) classes.push('custody');
+      const onTrip = sharedEventsOn(ds).some(e => e.type === 'jobbresa');
+      if(onTrip) classes.push('jobbresa');
       if(ds === ts) classes.push('today');
       let marks = '';
       const wd = wIdx(d);
@@ -1131,6 +1151,7 @@ function renderCal(){
       }
       if(state.mealPlan[ds]) marks += '<span class="mk" title="Middag planerad">🍽️</span>';
       if(state.plannedActivities[ds] && state.plannedActivities[ds].length) marks += '<span class="mk" title="Aktivitet planerad">🎈</span>';
+      if(onTrip) marks += '<span class="mk" title="Jobbresa (från Skrivbordet)">🧳</span>';
       grid += '<button class="' + classes.join(' ') + '" onclick="App.openDay(\'' + ds + '\')">' +
         (hasKids(ds) ? '<span class="heart">💛</span>' : '') +
         '<span class="num">' + d.getDate() + '</span>' +
@@ -1141,7 +1162,7 @@ function renderCal(){
   grid += '</div>';
 
   let legend = '<div class="legend">' +
-    '<span>💛 barnen hos dig</span><span>🍽️ middag</span><span>🎈 aktivitet</span>';
+    '<span>💛 barnen hos dig</span><span>🍽️ middag</span><span>🎈 aktivitet</span><span>🧳 jobbresa (Skrivbordet)</span>';
   for(const c of state.children){
     if(c.gympa && c.gympa.length) legend += '<span><span class="dot" style="background:' + c.color + '"></span>' + esc(c.name) + 's gympa</span>';
   }
@@ -1479,6 +1500,12 @@ if('serviceWorker' in navigator){
     }).catch(() => { /* offline/installerbart stöd saknas – appen funkar ändå i webbläsaren */ });
   });
 }
+
+/* Uppdatera direkt om Skrivbordet (öppet i en annan flik, samma origin)
+   lägger till/ändrar en jobbresa medan Vardagskoll är öppen. */
+window.addEventListener('storage', e => {
+  if(e.key === SHARED_EVENTS_KEY) renderAll();
+});
 
 /* ================= Start ================= */
 load();

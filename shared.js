@@ -48,6 +48,17 @@ function reminderText(r){
   return 'På ' + wd + ' (om 2 dagar) har ' + r.child.name + ' gympa – kolla att gympakläderna är rena. 👟';
 }
 
+/* ---- Delade händelser med Skrivbordet (samma origin, egen app) ----
+   Nyckel + format måste stämma överens med skrivbordet/shared.js:
+   { 'YYYY-MM-DD': [ { type, label, source } ] } */
+const SHARED_EVENTS_KEY = 'delade-handelser-v1';
+
+function loadSharedEvents(){
+  try{ return JSON.parse(localStorage.getItem(SHARED_EVENTS_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function sharedEventsOn(ds){ return loadSharedEvents()[ds] || []; }
+
 /* ---- Minimal IndexedDB-hjälp, funkar både på sidan och i service workern ---- */
 const IDB_NAME = 'vardagskoll-db';
 const IDB_STORE = 'meta';

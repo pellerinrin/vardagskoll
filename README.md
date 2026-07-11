@@ -13,6 +13,10 @@ Byggd som en installerbar PWA (Progressive Web App): ingen backend, ingen databa
 - **Gympapåminnelser** — lägg in vilka dagar barnen har gympa, få påminnelse 1 och 2 dagar innan
 - **Installerbar** — lägg till på hemskärmen så fungerar den som en riktig app, även offline
 
+## Jobbresor från Skrivbordet
+
+Om [Skrivbordet](https://github.com/pellerinrin/skrivbordet) körs på **samma origin** (samma domän, t.ex. samma GitHub Pages-konto) visar kalendern automatiskt en 🧳-markering på dagar du lagt in som jobbresa där. Delningen sker via `localStorage`-nyckeln `delade-handelser-v1` (se `shared.js`) och uppdateras direkt om båda apparna är öppna samtidigt. Vardagskoll läser bara denna data — jobbresor läggs till och tas bort i Skrivbordet.
+
 ## Köra lokalt
 
 Öppna `index.html` direkt i en webbläsare, eller starta en lokal server:
