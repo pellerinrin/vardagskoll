@@ -131,6 +131,16 @@
   .bar{height:10px; background:#f1e9dc; border-radius:999px; overflow:hidden; margin:8px 0 4px;}
   .bar .fill{height:100%; background:var(--green); border-radius:999px; transition:width .3s ease;}
 
+  /* elpriser */
+  .elpris-bars{ display:flex; align-items:flex-end; gap:2px; height:92px; margin:12px 0 4px; border-bottom:1px solid var(--line); padding-bottom:2px; }
+  .elpris-bar-wrap{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
+  .elpris-bar-wrap.now .elpris-bar{ outline:2px solid var(--accent); outline-offset:1px; }
+  .elpris-bar{ width:100%; max-width:11px; border-radius:3px 3px 0 0; background:#ccc; min-height:3px; }
+  .elpris-bar.cheap{ background:#2f9e44; }
+  .elpris-bar.mid{ background:#f0b429; }
+  .elpris-bar.expensive{ background:#e03131; }
+  .elpris-hlabel{ font-size:8.5px; color:var(--muted); margin-top:3px; height:11px; line-height:11px; }
+
   /* calendar */
   .cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px;}
   .cal-head .title{font-size:17px; font-weight:800; text-transform:capitalize;}
@@ -361,7 +371,8 @@ function defaultState(){
     plannedActivities: {}, /* {'YYYY-MM-DD': [{id, emoji, name}]} */
     cleaningTasks: [],     /* {id, name, day:0..6} */
     cleaningDone: {},      /* {'YYYY-Wnn': {taskId:true}} */
-    notified: {}           /* {key: 'YYYY-MM-DD'} */
+    notified: {},          /* {key: 'YYYY-MM-DD'} */
+    elprisCache: {}        /* {'elpris-YYYY-MM-DD-SE4': {fetched, hours:[{startIso, sek}]}} */
   };
 }
 
@@ -412,6 +423,163 @@ function toast(msg){
   toast._t = setTimeout(() => el.classList.remove('show'), 2400);
 }
 
+/* ================= Elpriser (elprisetjustnu.se, zon SE4) ================= */
+const ELPRIS_ZONE = 'SE4';
+let elprisToday = null;
+let elprisTomorrow = null;
+let elprisLastAttempt = 0;
+
+function elprisCacheKey(ds){ return 'elpris-' + ds + '-' + ELPRIS_ZONE; }
+
+function elprisFromCache(ds){
+  const c = state.elprisCache && state.elprisCache[elprisCacheKey(ds)];
+  return c ? c.hours : null;
+}
+
+async function fetchElprisDay(ds){
+  const cached = elprisFromCache(ds);
+  try{
+    const [y, m, d] = ds.split('-');
+    const url = 'https://www.elprisetjustnu.se/api/v1/prices/' + y + '/' + m + '-' + d + '_' + ELPRIS_ZONE + '.json';
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    const hours = data.map(h => ({ startIso: h.time_start, sek: h.SEK_per_kWh }));
+    if(!state.elprisCache) state.elprisCache = {};
+    state.elprisCache[elprisCacheKey(ds)] = { fetched: Date.now(), hours: hours };
+    const keys = Object.keys(state.elprisCache).sort();
+    while(keys.length > 6){ delete state.elprisCache[keys.shift()]; }
+    save();
+    return hours;
+  }catch(e){
+    return cached; /* offline eller morgondagens priser inte publicerade ännu */
+  }
+}
+
+async function loadElpriser(){
+  const t = todayDate();
+  const todayDs = fmtDate(t);
+  const tomorrowDs = fmtDate(addDays(t, 1));
+
+  /* visa cachad data direkt, hämta färskt i bakgrunden */
+  if(!elprisToday) elprisToday = elprisFromCache(todayDs);
+  if(!elprisTomorrow) elprisTomorrow = elprisFromCache(tomorrowDs);
+  if(App.tab === 'stad') renderStad();
+
+  const now = Date.now();
+  if(elprisToday && elprisTomorrow && (now - elprisLastAttempt) < 5 * 60 * 1000) return;
+  elprisLastAttempt = now;
+
+  const [th, tm] = await Promise.all([fetchElprisDay(todayDs), fetchElprisDay(tomorrowDs)]);
+  elprisToday = th;
+  elprisTomorrow = tm;
+  if(App.tab === 'stad') renderStad();
+}
+
+function groupHourRanges(hourIndices){
+  const sorted = [...hourIndices].sort((a, b) => a - b);
+  const ranges = [];
+  let start = null, prev = null;
+  for(const h of sorted){
+    if(start === null){ start = h; prev = h; continue; }
+    if(h === prev + 1){ prev = h; continue; }
+    ranges.push([start, prev]); start = h; prev = h;
+  }
+  if(start !== null) ranges.push([start, prev]);
+  return ranges.map(([a, b]) => pad2(a) + ':00–' + pad2(b + 1) + ':00');
+}
+
+/* API:et levererar priser i 15-minutersupplösning (Nord Pool-standard sedan 2025),
+   så vi slår ihop till klocktimmar för en tydlig "timme för timme"-överblick. */
+function aggregateToHourly(slots){
+  if(!slots || !slots.length) return null;
+  const buckets = new Array(24).fill(null).map(() => []);
+  for(const s of slots){
+    const hr = new Date(s.startIso).getHours();
+    if(hr >= 0 && hr < 24) buckets[hr].push(s.sek);
+  }
+  return buckets
+    .map((arr, hr) => arr.length ? { hour: hr, sek: arr.reduce((a, b) => a + b, 0) / arr.length } : null)
+    .filter(Boolean);
+}
+
+function renderElprisCard(){
+  const dayKey = App.elprisDay === 'tomorrow' ? 'tomorrow' : 'today';
+  const rawSlots = dayKey === 'today' ? elprisToday : elprisTomorrow;
+  const hourly = aggregateToHourly(rawSlots);
+  const t = todayDate();
+  const labelDate = dayKey === 'today' ? t : addDays(t, 1);
+
+  let html = '<div class="card"><h2>⚡ Elpriser <span class="sub">zon SE4' +
+    (hourly ? ' · ' + humanDate(labelDate) : '') + '</span></h2>';
+
+  html += '<div class="filters">' +
+    '<button class="chip ' + (dayKey === 'today' ? 'on' : '') + '" onclick="App.setElprisDay(\'today\')">Idag</button>' +
+    '<button class="chip ' + (dayKey === 'tomorrow' ? 'on' : '') + '" onclick="App.setElprisDay(\'tomorrow\')">Imorgon</button>' +
+    '</div>';
+
+  if(!hourly || !hourly.length){
+    html += dayKey === 'tomorrow'
+      ? '<p class="empty">Morgondagens priser brukar publiceras runt kl 13 – kolla igen senare.</p>'
+      : '<p class="empty">Kunde inte hämta elpriser just nu (ingen uppkoppling?). Försöker igen automatiskt.</p>';
+    html += '</div>';
+    return html;
+  }
+
+  const n = hourly.length;
+  const prices = hourly.map(h => h.sek);
+  const maxP = Math.max(...prices, 0.001);
+  const rank = new Array(n);
+  const byPrice = prices.map((p, i) => ({ p, i })).sort((a, b) => a.p - b.p);
+  const cheapCount = Math.max(1, Math.round(n / 3));
+  byPrice.forEach((e, idx) => {
+    rank[e.i] = idx < cheapCount ? 'cheap' : (idx >= n - cheapCount ? 'expensive' : 'mid');
+  });
+
+  const nowH = new Date().getHours();
+  const currentIdx = (dayKey === 'today') ? hourly.findIndex(h => h.hour === nowH) : -1;
+
+  let bars = '';
+  for(let i = 0; i < n; i++){
+    const hr = hourly[i].hour;
+    const ore = Math.round(prices[i] * 100);
+    const heightPct = maxP > 0 ? Math.max(6, Math.round((prices[i] / maxP) * 100)) : 6;
+    bars += '<div class="elpris-bar-wrap' + (i === currentIdx ? ' now' : '') + '" ' +
+      'title="' + pad2(hr) + ':00–' + pad2((hr + 1) % 24) + ':00 · ' + ore + ' öre/kWh">' +
+      '<div class="elpris-bar ' + rank[i] + '" style="height:' + heightPct + '%"></div>' +
+      '<span class="elpris-hlabel">' + (hr % 3 === 0 ? pad2(hr) : '') + '</span>' +
+      '</div>';
+  }
+  html += '<div class="elpris-bars">' + bars + '</div>';
+
+  html += '<div class="legend">' +
+    '<span><span class="dot" style="background:#2f9e44"></span>Billigt – bra läge att tvätta/diska</span>' +
+    '<span><span class="dot" style="background:#f0b429"></span>Mellan</span>' +
+    '<span><span class="dot" style="background:#e03131"></span>Dyrt – undvik om du kan</span>' +
+    '</div>';
+
+  const cheapRanges = groupHourRanges(hourly.filter((h, i) => rank[i] === 'cheap').map(h => h.hour)).join(', ');
+  const expensiveRanges = groupHourRanges(hourly.filter((h, i) => rank[i] === 'expensive').map(h => h.hour)).join(', ');
+  const avgOre = Math.round((prices.reduce((a, b) => a + b, 0) / n) * 100);
+
+  html += '<p class="small" style="margin:10px 0 2px"><b>🟢 Bäst att köra tvätt/disk/tvättmaskin:</b> ' + esc(cheapRanges) + '</p>' +
+    '<p class="small muted" style="margin:0 0 2px"><b>🔴 Undvik:</b> ' + esc(expensiveRanges) + '</p>' +
+    '<p class="small muted" style="margin:0">Snittpris: ' + avgOre + ' öre/kWh</p>';
+
+  if(dayKey === 'today' && currentIdx >= 0){
+    const nowOre = Math.round(prices[currentIdx] * 100);
+    const nowCls = rank[currentIdx];
+    const nowHr = hourly[currentIdx].hour;
+    const nowMsg = nowCls === 'cheap' ? '🟢 Bra läge att köra elkrävande sysslor just nu!' :
+      (nowCls === 'expensive' ? '🔴 Dyrt just nu – vänta om du kan.' : '🟡 Helt okej läge just nu.');
+    html += '<p class="small" style="margin:10px 0 0; font-weight:800">Just nu (kl ' + pad2(nowHr) + '–' + pad2((nowHr + 1) % 24) + '): ' +
+      nowOre + ' öre/kWh — ' + nowMsg + '</p>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
 /* ================= App (händelser) ================= */
 const App = {
   tab: 'idag',
@@ -419,10 +587,12 @@ const App = {
   calM: todayDate().getMonth(),
   actFilter: 'alla',
   cleanEditMode: false,
+  elprisDay: 'today',
   _pending: null,
 
   go(tab){
     this.tab = tab;
+    if(tab === 'stad') loadElpriser();
     document.querySelectorAll('section.view').forEach(s => s.classList.remove('active'));
     document.getElementById('view-' + tab).classList.add('active');
     document.querySelectorAll('nav#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -709,6 +879,11 @@ const App = {
   cleanRemove(id){
     state.cleaningTasks = state.cleaningTasks.filter(t => t.id !== id);
     save(); renderStad(); renderToday();
+  },
+  setElprisDay(day){
+    this.elprisDay = day;
+    renderStad();
+    loadElpriser();
   },
 
   /* ---- Barn & gympa ---- */
@@ -1118,7 +1293,9 @@ function renderStad(){
   const doneCount = tasks.filter(x => doneMap[x.id]).length;
   const pct = tasks.length ? Math.round(100 * doneCount / tasks.length) : 0;
 
-  let html = '<div class="card">' +
+  let html = renderElprisCard();
+
+  html += '<div class="card">' +
     '<h2>🧹 Veckans städning <span class="sub">v.' + isoWeekInfo(t).week + '</span></h2>' +
     '<div class="bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
     '<p class="small muted" style="margin:0 0 6px">' + doneCount + ' av ' + tasks.length + ' klara · listan nollställs varje måndag</p>';
@@ -1308,12 +1485,14 @@ load();
 syncReminderDataToIDB();
 App.go('idag');
 checkNotifications();
+loadElpriser();
 
 let lastDay = fmtDate(todayDate());
 setInterval(() => {
   const now = fmtDate(todayDate());
   if(now !== lastDay){ lastDay = now; renderAll(); }
   checkNotifications();
+  loadElpriser();
 }, 60000);
 </script>
 </body>
