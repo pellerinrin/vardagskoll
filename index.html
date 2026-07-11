@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Vardagskoll 🧡</title>
+<meta name="description" content="Barnschema, mat, aktiviteter och städ – allt på ett ställe.">
+
+<!-- PWA: installerbar hemskärms-app -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e8590c">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧡</text></svg>">
+
+<!-- iOS: "Lägg till på hemskärmen" -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vardagskoll">
+
+<script src="shared.js"></script>
+<style>
+  :root{
+    --bg:#faf6f0;
+    --card:#ffffff;
+    --ink:#3b342e;
+    --muted:#8d8378;
+    --line:#eee5d8;
+    --accent:#e8590c;
+    --accent-dark:#c94a08;
+    --accent-soft:#ffe9db;
+    --custody:#fff1c2;
+    --custody-line:#f0d98a;
+    --green:#2f9e44;
+    --green-soft:#e3f5e6;
+    --alert:#fff6d6;
+    --alert-line:#f2df9e;
+    --radius:16px;
+    --nav-h:64px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:16px; line-height:1.45;
+    padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  main{max-width:720px; margin:0 auto; padding:14px 14px 0;}
+  header.top{
+    max-width:720px; margin:0 auto; padding:16px 16px 4px;
+    display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap;
+  }
+  header.top h1{font-size:22px; margin:0; letter-spacing:.2px;}
+  header.top .today-line{color:var(--muted); font-size:14px; font-weight:600;}
+
+  section.view{display:none;}
+  section.view.active{display:block; animation:fadein .15s ease;}
+  @keyframes fadein{from{opacity:.4; transform:translateY(3px);} to{opacity:1; transform:none;}}
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(90,70,40,.05);
+  }
+  .card h2{margin:0 0 10px; font-size:16px;}
+  .card h2 .sub{color:var(--muted); font-weight:600; font-size:13px;}
+  .muted{color:var(--muted);}
+  .small{font-size:13px;}
+  .center{text-align:center;}
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    background:var(--accent); color:#fff; border:none; border-radius:12px;
+    padding:10px 16px; font-size:15px; font-weight:700; cursor:pointer;
+    min-height:42px; font-family:inherit;
+  }
+  .btn:active{background:var(--accent-dark);}
+  .btn.ghost{background:#fff; color:var(--accent); border:2px solid var(--accent-soft);}
+  .btn.ghost:active{background:var(--accent-soft);}
+  .btn.small{min-height:34px; padding:6px 12px; font-size:13.5px; border-radius:10px;}
+  .btn.subtle{background:#f4ede3; color:var(--ink);}
+  .btn.subtle:active{background:#eadfce;}
+  .btn.danger{background:#fdeaea; color:#c0392b;}
+  .btn.full{width:100%;}
+
+  input[type=text], select{
+    font-family:inherit; font-size:15px; color:var(--ink);
+    border:2px solid var(--line); border-radius:12px; padding:10px 12px;
+    background:#fff; min-height:42px; width:100%;
+  }
+  input[type=text]:focus, select:focus{outline:none; border-color:var(--accent);}
+  .inline-form{display:flex; gap:8px; margin-top:10px;}
+  .inline-form input{flex:1; min-width:0;}
+  .inline-form .btn{flex-shrink:0;}
+
+  /* badges & pills */
+  .badge{
+    display:inline-flex; align-items:center; gap:6px;
+    border-radius:999px; padding:4px 12px; font-size:13.5px; font-weight:700;
+  }
+  .badge.custody{background:var(--custody); border:1px solid var(--custody-line);}
+  .badge.free{background:#e9e4f7; border:1px solid #d4cbee;}
+  .chip{
+    display:inline-flex; align-items:center; justify-content:center;
+    border-radius:999px; padding:6px 14px; font-size:14px; font-weight:700;
+    background:#f4ede3; color:var(--ink); border:2px solid transparent; cursor:pointer;
+    font-family:inherit;
+  }
+  .chip.on{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-dark);}
+  .chip.day{width:40px; height:40px; padding:0;}
+
+  /* reminders */
+  .reminder{
+    display:flex; gap:10px; align-items:flex-start;
+    background:var(--alert); border:1px solid var(--alert-line); border-radius:12px;
+    padding:10px 12px; margin-bottom:8px; font-weight:600; font-size:14.5px;
+  }
+  .reminder .ic{font-size:20px; line-height:1.2;}
+
+  /* checklist */
+  .task{
+    display:flex; align-items:center; gap:10px; padding:10px 4px;
+    border-bottom:1px solid var(--line); font-size:15px;
+  }
+  .task:last-child{border-bottom:none;}
+  .task input[type=checkbox]{width:22px; height:22px; accent-color:var(--green); flex-shrink:0; cursor:pointer;}
+  .task.done .txt{text-decoration:line-through; color:var(--muted);}
+  .task .txt{flex:1;}
+  .task .x{background:none; border:none; color:#c0392b; font-size:17px; cursor:pointer; padding:4px 8px;}
+
+  .bar{height:10px; background:#f1e9dc; border-radius:999px; overflow:hidden; margin:8px 0 4px;}
+  .bar .fill{height:100%; background:var(--green); border-radius:999px; transition:width .3s ease;}
+
+  /* calendar */
+  .cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px;}
+  .cal-head .title{font-size:17px; font-weight:800; text-transform:capitalize;}
+  .cal-nav{display:flex; gap:6px;}
+  .cal-grid{display:grid; grid-template-columns:30px repeat(7,1fr); gap:4px;}
+  .cal-grid .wd{
+    text-align:center; font-size:12px; font-weight:700; color:var(--muted);
+    padding:2px 0; text-transform:uppercase; letter-spacing:.4px;
+  }
+  .cal-grid .wk{
+    display:flex; align-items:center; justify-content:center;
+    font-size:11.5px; font-weight:700; color:var(--muted);
+    background:#f4ede3; border-radius:8px; cursor:pointer; border:none; font-family:inherit;
+  }
+  .cal-grid .wk:active{background:var(--accent-soft); color:var(--accent-dark);}
+  .cell{
+    position:relative; min-height:56px; border-radius:10px; border:1.5px solid var(--line);
+    background:#fff; padding:4px 5px; cursor:pointer; font-family:inherit; text-align:left;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .cell .num{font-size:13px; font-weight:700;}
+  .cell.out{opacity:.45;}
+  .cell.custody{background:var(--custody); border-color:var(--custody-line);}
+  .cell.today{border-color:var(--accent); border-width:2px;}
+  .cell .heart{position:absolute; top:3px; right:5px; font-size:10px;}
+  .cell .marks{display:flex; flex-wrap:wrap; gap:3px; align-items:center; margin-top:auto;}
+  .cell .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  .cell .mk{font-size:10px; line-height:1;}
+  .legend{display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; font-size:13px; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:5px;}
+  .legend .dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+
+  /* meal & activity cards */
+  .sugg-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  @media (max-width:480px){ .sugg-grid{grid-template-columns:1fr;} }
+  .sugg{
+    border:1px solid var(--line); border-radius:12px; padding:12px; background:#fffdf9;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .sugg .name{font-weight:800; font-size:15px;}
+  .sugg .ing{font-size:12.5px; color:var(--muted);}
+  .sugg .tags{display:flex; gap:5px; flex-wrap:wrap;}
+  .sugg .tag{font-size:11.5px; font-weight:700; background:#eef3ea; color:#4a7c3f; border-radius:999px; padding:2px 9px;}
+  .sugg .row{display:flex; gap:6px; flex-wrap:wrap; margin-top:auto;}
+  .sugg .rm{align-self:flex-end; background:none; border:none; color:#c0392b; cursor:pointer; font-size:13px; padding:0; font-family:inherit; font-weight:700;}
+
+  .plan-row{
+    display:flex; align-items:center; gap:10px; padding:9px 4px;
+    border-bottom:1px solid var(--line); font-size:14.5px;
+  }
+  .plan-row:last-child{border-bottom:none;}
+  .plan-row .d{width:86px; flex-shrink:0; font-weight:700;}
+  .plan-row .d .sub{display:block; font-size:11.5px; color:var(--muted); font-weight:600;}
+  .plan-row .what{flex:1;}
+  .plan-row .heart{flex-shrink:0;}
+
+  /* modal */
+  #overlay{
+    display:none; position:fixed; inset:0; background:rgba(50,40,25,.45); z-index:50;
+    align-items:flex-end; justify-content:center; padding:0;
+  }
+  #overlay.open{display:flex;}
+  #sheet{
+    background:var(--bg); border-radius:20px 20px 0 0; width:100%; max-width:720px;
+    max-height:88vh; overflow-y:auto; padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px));
+    animation:slideup .18s ease;
+  }
+  @media (min-width:721px){
+    #overlay{align-items:center; padding:24px;}
+    #sheet{border-radius:20px; max-height:80vh;}
+  }
+  @keyframes slideup{from{transform:translateY(40px); opacity:.5;} to{transform:none; opacity:1;}}
+  .sheet-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+  .sheet-head h3{margin:0; font-size:18px; text-transform:capitalize;}
+  .sheet-head .close{background:#f4ede3; border:none; border-radius:50%; width:36px; height:36px; font-size:16px; cursor:pointer;}
+  .sheet-sec{background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px;}
+  .sheet-sec h4{margin:0 0 8px; font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+  .daypick{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .daypick button{
+    border:1.5px solid var(--line); background:#fff; border-radius:12px; padding:10px;
+    font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; text-align:left;
+  }
+  .daypick button:active{border-color:var(--accent); background:var(--accent-soft);}
+  .daypick button .sub{display:block; font-size:12px; color:var(--muted); font-weight:600;}
+
+  /* toast */
+  #toast{
+    position:fixed; left:50%; bottom:calc(var(--nav-h) + 22px); transform:translateX(-50%) translateY(20px);
+    background:#3b342e; color:#fff; padding:10px 18px; border-radius:999px; font-size:14px; font-weight:700;
+    opacity:0; pointer-events:none; transition:all .25s ease; z-index:99; max-width:90%; text-align:center;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  /* bottom nav */
+  nav#tabs{
+    position:fixed; bottom:0; left:0; right:0; z-index:40;
+    background:#fff; border-top:1px solid var(--line);
+    display:flex; justify-content:space-around;
+    height:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    max-width:100%;
+  }
+  nav#tabs button{
+    flex:1; background:none; border:none; cursor:pointer; font-family:inherit;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    font-size:10.5px; font-weight:700; color:var(--muted); padding:6px 2px;
+  }
+  nav#tabs button .ic{font-size:21px; line-height:1.2;}
+  nav#tabs button.on{color:var(--accent-dark);}
+
+  .empty{color:var(--muted); font-size:14px; padding:6px 2px;}
+  .kid-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 0; border-bottom:1px solid var(--line);}
+  .kid-row:last-child{border-bottom:none;}
+  .kid-dot{width:14px; height:14px; border-radius:50%; flex-shrink:0;}
+  .kid-name{font-weight:800; font-size:16px; flex:1;}
+  .gympa-days{display:flex; gap:5px; flex-wrap:wrap; width:100%;}
+  .filters{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px;}
+  .biglink{width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; font-family:inherit; font-size:15px; font-weight:700; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; color:var(--ink);}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Vardagskoll 🧡</h1>
+  <div class="today-line" id="headerDate"></div>
+</header>
+
+<main>
+  <section class="view" id="view-idag"></section>
+  <section class="view" id="view-kal"></section>
+  <section class="view" id="view-mat"></section>
+  <section class="view" id="view-akt"></section>
+  <section class="view" id="view-stad"></section>
+  <section class="view" id="view-mer"></section>
+</main>
+
+<div id="overlay" onclick="if(event.target===this)App.closeModal()">
+  <div id="sheet"></div>
+</div>
+<div id="toast"></div>
+
+<nav id="tabs">
+  <button data-tab="idag" onclick="App.go('idag')"><span class="ic">🏠</span>Idag</button>
+  <button data-tab="kal" onclick="App.go('kal')"><span class="ic">📅</span>Kalender</button>
+  <button data-tab="mat" onclick="App.go('mat')"><span class="ic">🍽️</span>Mat</button>
+  <button data-tab="akt" onclick="App.go('akt')"><span class="ic">🎈</span>Aktivitet</button>
+  <button data-tab="stad" onclick="App.go('stad')"><span class="ic">🧹</span>Städ</button>
+  <button data-tab="mer" onclick="App.go('mer')"><span class="ic">⚙️</span>Mer</button>
+</nav>
+
+<script>
+'use strict';
+
+/* Datum-/veckohjälpare och gympapåminnelse-logik laddas från shared.js
+   (delas med service workern så bakgrundskontroller använder samma regler). */
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ================= Förslag (inbyggda) ================= */
+const SUGGESTED_MEALS = [
+  {id:'sm01', emoji:'🍝', name:'Spaghetti & köttfärssås', ing:['köttfärs','spaghetti','krossade tomater','gul lök','vitlök','tomatpuré']},
+  {id:'sm02', emoji:'🌮', name:'Tacos', ing:['köttfärs','tacokrydda','tortillabröd','tomat','gurka','majs','riven ost','gräddfil']},
+  {id:'sm03', emoji:'🥞', name:'Pannkakor', ing:['ägg','mjölk','vetemjöl','smör','sylt']},
+  {id:'sm04', emoji:'🍲', name:'Korv stroganoff', ing:['falukorv','gul lök','tomatpuré','matlagningsgrädde','ris']},
+  {id:'sm05', emoji:'🐟', name:'Fiskpinnar med mos', ing:['fiskpinnar','potatismos','ärtor','citron']},
+  {id:'sm06', emoji:'🍛', name:'Kycklinggryta med ris', ing:['kycklingfilé','matlagningsgrädde','paprika','kycklingbuljong','ris']},
+  {id:'sm07', emoji:'🧆', name:'Köttbullar & makaroner', ing:['köttbullar','makaroner','ketchup','gurka']},
+  {id:'sm08', emoji:'🧀', name:'Falukorv i ugn', ing:['falukorv','tomatpuré','riven ost','ris']},
+  {id:'sm09', emoji:'🥘', name:'Lasagne', ing:['köttfärs','lasagneplattor','krossade tomater','crème fraiche','riven ost']},
+  {id:'sm10', emoji:'🍅', name:'Tomatsoppa med grillost', ing:['krossade tomater','grädde','grönsaksbuljong','halloumi','bröd']},
+  {id:'sm11', emoji:'🍳', name:'Pytt i panna', ing:['pytt i panna (fryst)','ägg','rödbetor']},
+  {id:'sm12', emoji:'🌯', name:'Kycklingfajitas', ing:['kycklingfilé','fajitakrydda','paprika','rödlök','tortillabröd','crème fraiche']},
+  {id:'sm13', emoji:'🐠', name:'Lax i ugn', ing:['laxfilé','potatis','citron','crème fraiche','dill']},
+  {id:'sm14', emoji:'🥓', name:'Ugnspannkaka', ing:['ägg','mjölk','vetemjöl','bacon','lingonsylt']},
+  {id:'sm15', emoji:'🥟', name:'Tortellini med pesto', ing:['färsk tortellini','pesto','körsbärstomater','riven parmesan']},
+  {id:'sm16', emoji:'🍕', name:'Fredagspizza', ing:['pizzabotten','tomatsås','riven ost','skinka','majs']}
+];
+
+const SUGGESTED_ACTIVITIES = [
+  {id:'sa01', emoji:'🛝', name:'Lekplatsen', tags:['ute','gratis']},
+  {id:'sa02', emoji:'🌲', name:'Skogspromenad', tags:['ute','gratis']},
+  {id:'sa03', emoji:'🚲', name:'Cykeltur', tags:['ute','gratis']},
+  {id:'sa04', emoji:'🧺', name:'Picknick i parken', tags:['ute','gratis']},
+  {id:'sa05', emoji:'⚽', name:'Bollek i parken', tags:['ute','gratis']},
+  {id:'sa06', emoji:'🍦', name:'Glasspromenad', tags:['ute']},
+  {id:'sa07', emoji:'🌱', name:'Plantera frön', tags:['ute','inne']},
+  {id:'sa08', emoji:'🏊', name:'Simhallen', tags:['inne']},
+  {id:'sa09', emoji:'📚', name:'Biblioteket', tags:['inne','gratis']},
+  {id:'sa10', emoji:'🏛️', name:'Museum', tags:['inne']},
+  {id:'sa11', emoji:'🧁', name:'Baka tillsammans', tags:['inne','gratis']},
+  {id:'sa12', emoji:'🍿', name:'Filmkväll med popcorn', tags:['inne']},
+  {id:'sa13', emoji:'🎲', name:'Spelkväll', tags:['inne','gratis']},
+  {id:'sa14', emoji:'🎨', name:'Pysselstund', tags:['inne','gratis']},
+  {id:'sa15', emoji:'🗺️', name:'Skattjakt hemma', tags:['inne','gratis']},
+  {id:'sa16', emoji:'🏰', name:'Bygga koja av filtar', tags:['inne','gratis']}
+];
+
+const DEFAULT_CLEANING = [
+  {id:'dc01', name:'Tvätta en maskin', day:0},
+  {id:'dc02', name:'Rensa väskor & fickor', day:0},
+  {id:'dc03', name:'Dammsug vardagsrum & hall', day:1},
+  {id:'dc04', name:'Torka av i badrummet', day:2},
+  {id:'dc05', name:'Tvätta en maskin', day:3},
+  {id:'dc06', name:'Byt handdukar', day:3},
+  {id:'dc07', name:'10 min snabbplock – alla hjälps åt', day:4},
+  {id:'dc08', name:'Torka köksbänkar & matbord', day:4},
+  {id:'dc09', name:'Dammsug sovrummen', day:5},
+  {id:'dc10', name:'Byt sängkläder', day:5},
+  {id:'dc11', name:'Töm alla papperskorgar', day:6},
+  {id:'dc12', name:'Planera veckan (5 min)', day:6}
+];
+
+const KID_COLORS = ['#e17055','#0984e3','#00b894','#e84393','#f39c12','#6c5ce7'];
+
+/* ================= State ================= */
+const LS_KEY = 'vardagskoll-v1';
+
+function defaultState(){
+  return {
+    children: [],          /* {id, name, color, gympa:[0..6]} */
+    custody: {},           /* {'YYYY-MM-DD': true} */
+    customMeals: [],       /* {id, emoji, name, ing:[]} */
+    mealPlan: {},          /* {'YYYY-MM-DD': {name, emoji}} */
+    shopping: [],          /* {id, text, done} */
+    customActivities: [],  /* {id, emoji, name, tags:[]} */
+    plannedActivities: {}, /* {'YYYY-MM-DD': [{id, emoji, name}]} */
+    cleaningTasks: [],     /* {id, name, day:0..6} */
+    cleaningDone: {},      /* {'YYYY-Wnn': {taskId:true}} */
+    notified: {}           /* {key: 'YYYY-MM-DD'} */
+  };
+}
+
+let state = defaultState();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      state = Object.assign(defaultState(), data);
+    } else {
+      state.cleaningTasks = DEFAULT_CLEANING.map(t => Object.assign({}, t));
+      save();
+    }
+  }catch(e){
+    state = defaultState();
+    state.cleaningTasks = DEFAULT_CLEANING.map(t => Object.assign({}, t));
+  }
+}
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+  catch(e){ toast('⚠️ Kunde inte spara – kontrollera lagringsutrymmet'); }
+  syncReminderDataToIDB();
+}
+
+/* ================= Gemensamt ================= */
+function allMeals(){ return SUGGESTED_MEALS.concat(state.customMeals); }
+function getMeal(ref){ return allMeals().find(m => m.id === ref) || null; }
+function allActivities(){ return SUGGESTED_ACTIVITIES.concat(state.customActivities); }
+function getActivity(ref){ return allActivities().find(a => a.id === ref) || null; }
+function hasKids(ds){ return !!state.custody[ds]; }
+
+/* Håller IndexedDB i synk med barn/gympa-schema och skickade notiser,
+   så att service workerns bakgrundskontroll (best effort) ser samma data. */
+function syncReminderDataToIDB(){
+  try{
+    idbSet('children', state.children);
+    idbSet('notified', state.notified);
+  }catch(e){ /* IndexedDB saknas/blockerad – ingen fara, allt funkar ändå när appen är öppen */ }
+}
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+/* ================= App (händelser) ================= */
+const App = {
+  tab: 'idag',
+  calY: todayDate().getFullYear(),
+  calM: todayDate().getMonth(),
+  actFilter: 'alla',
+  cleanEditMode: false,
+  _pending: null,
+
+  go(tab){
+    this.tab = tab;
+    document.querySelectorAll('section.view').forEach(s => s.classList.remove('active'));
+    document.getElementById('view-' + tab).classList.add('active');
+    document.querySelectorAll('nav#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    window.scrollTo(0, 0);
+    renderAll();
+  },
+
+  /* ---- Kalender ---- */
+  calShift(n){
+    let m = this.calM + n, y = this.calY;
+    if(m < 0){ m = 11; y--; }
+    if(m > 11){ m = 0; y++; }
+    this.calM = m; this.calY = y;
+    renderCal();
+  },
+  calGoToday(){
+    const t = todayDate();
+    this.calY = t.getFullYear(); this.calM = t.getMonth();
+    renderCal();
+  },
+  toggleCustody(ds){
+    if(state.custody[ds]) delete state.custody[ds];
+    else state.custody[ds] = true;
+    save(); renderAll();
+    this.openDay(ds);
+  },
+  toggleWeekCustody(mondayDs){
+    const mon = parseDate(mondayDs);
+    const days = [];
+    for(let i = 0; i < 7; i++) days.push(fmtDate(addDays(mon, i)));
+    const allSet = days.every(ds => state.custody[ds]);
+    days.forEach(ds => { if(allSet) delete state.custody[ds]; else state.custody[ds] = true; });
+    save(); renderAll();
+    const w = isoWeekInfo(mon).week;
+    toast(allSet ? 'Vecka ' + w + ' avmarkerad' : '💛 Vecka ' + w + ': barnen hos dig');
+  },
+
+  /* ---- Dagvy (modal) ---- */
+  openDay(ds){
+    const d = parseDate(ds);
+    const custody = hasKids(ds);
+    const meal = state.mealPlan[ds] || null;
+    const acts = state.plannedActivities[ds] || [];
+    const wd = wIdx(d);
+    const gympaKids = state.children.filter(c => c.gympa && c.gympa.includes(wd));
+    const cleanTasks = state.cleaningTasks.filter(t => t.day === wd);
+
+    let mealOptions = '<option value="none"' + (meal ? '' : ' selected') + '>– Ingen middag vald –</option>';
+    let matched = false;
+    for(const m of allMeals()){
+      const sel = meal && meal.name === m.name;
+      if(sel) matched = true;
+      mealOptions += '<option value="' + m.id + '"' + (sel ? ' selected' : '') + '>' + m.emoji + ' ' + esc(m.name) + '</option>';
+    }
+    if(meal && !matched){
+      mealOptions += '<option value="__current" selected>✏️ ' + esc(meal.name) + '</option>';
+    }
+
+    let actList = '';
+    if(acts.length){
+      actList = acts.map(a =>
+        '<div class="task"><span class="txt">' + a.emoji + ' ' + esc(a.name) + '</span>' +
+        '<button class="x" title="Ta bort" onclick="App.removeDayActivity(\'' + ds + '\',\'' + a.id + '\')">✕</button></div>'
+      ).join('');
+    } else {
+      actList = '<div class="empty">Inget planerat ännu.</div>';
+    }
+
+    const actDatalist = '<datalist id="actSugg">' +
+      allActivities().map(a => '<option value="' + esc(a.name) + '"></option>').join('') + '</datalist>';
+
+    const gympaInfo = gympaKids.length
+      ? gympaKids.map(c => '<div class="task"><span class="txt">🤸 ' + esc(c.name) + ' har gympa på ' + WDAYS[wd] + 'ar – kom ihåg gympapåsen!</span></div>').join('')
+      : '';
+
+    const cleanInfo = cleanTasks.length
+      ? '<div class="sheet-sec"><h4>🧹 Städ denna veckodag</h4>' +
+        cleanTasks.map(t => '<div class="task"><span class="txt">' + esc(t.name) + '</span></div>').join('') + '</div>'
+      : '';
+
+    openModal(
+      '<div class="sheet-head"><h3>' + humanDate(d) + ' · v.' + isoWeekInfo(d).week + '</h3>' +
+      '<button class="close" onclick="App.closeModal()">✕</button></div>' +
+
+      '<div class="sheet-sec">' +
+      '<button class="btn full ' + (custody ? '' : 'ghost') + '" onclick="App.toggleCustody(\'' + ds + '\')">' +
+      (custody ? '💛 Barnen är hos dig – tryck för att ändra' : '🤍 Barnfri dag – tryck om du har barnen') + '</button>' +
+      '</div>' +
+
+      (gympaInfo ? '<div class="sheet-sec"><h4>👟 Gympa</h4>' + gympaInfo + '</div>' : '') +
+
+      '<div class="sheet-sec"><h4>🍽️ Middag</h4>' +
+      '<select onchange="App.dayMealChange(\'' + ds + '\', this.value)">' + mealOptions + '</select>' +
+      '<div class="inline-form"><input type="text" id="customMealInput" placeholder="…eller skriv egen middag" ' +
+      'onkeydown="if(event.key===\'Enter\')App.setCustomMeal(\'' + ds + '\')">' +
+      '<button class="btn small" onclick="App.setCustomMeal(\'' + ds + '\')">OK</button></div>' +
+      '</div>' +
+
+      '<div class="sheet-sec"><h4>🎈 Aktiviteter</h4>' + actList + actDatalist +
+      '<div class="inline-form"><input type="text" id="dayActInput" list="actSugg" placeholder="Lägg till aktivitet…" ' +
+      'onkeydown="if(event.key===\'Enter\')App.addDayActivity(\'' + ds + '\')">' +
+      '<button class="btn small" onclick="App.addDayActivity(\'' + ds + '\')">Lägg till</button></div>' +
+      '</div>' +
+
+      cleanInfo
+    );
+  },
+  dayMealChange(ds, val){
+    if(val === 'none'){ delete state.mealPlan[ds]; }
+    else if(val === '__current'){ /* behåll nuvarande egna middag */ }
+    else {
+      const m = getMeal(val);
+      if(m) state.mealPlan[ds] = { name: m.name, emoji: m.emoji };
+    }
+    save(); renderAll();
+    this.openDay(ds);
+  },
+  setCustomMeal(ds){
+    const input = document.getElementById('customMealInput');
+    const v = (input && input.value || '').trim();
+    if(!v) return;
+    state.mealPlan[ds] = { name: v, emoji: '🍽️' };
+    save(); renderAll();
+    this.openDay(ds);
+    toast('🍽️ ' + v + ' planerad');
+  },
+  addDayActivity(ds){
+    const input = document.getElementById('dayActInput');
+    const v = (input && input.value || '').trim();
+    if(!v) return;
+    const match = allActivities().find(a => a.name.toLowerCase() === v.toLowerCase());
+    if(!state.plannedActivities[ds]) state.plannedActivities[ds] = [];
+    state.plannedActivities[ds].push({ id: uid(), emoji: match ? match.emoji : '🎈', name: v });
+    save(); renderAll();
+    this.openDay(ds);
+  },
+  removeDayActivity(ds, actId){
+    if(!state.plannedActivities[ds]) return;
+    state.plannedActivities[ds] = state.plannedActivities[ds].filter(a => a.id !== actId);
+    if(!state.plannedActivities[ds].length) delete state.plannedActivities[ds];
+    save(); renderAll();
+    if(document.getElementById('overlay').classList.contains('open')) this.openDay(ds);
+  },
+
+  /* ---- Dagväljare (planera mat/aktivitet) ---- */
+  planMeal(ref){
+    const m = getMeal(ref);
+    if(!m) return;
+    this._pending = { type: 'meal', ref: ref };
+    openDayPicker('📅 Vilken dag vill du äta ' + esc(m.name) + '?');
+  },
+  planActivity(ref){
+    const a = getActivity(ref);
+    if(!a) return;
+    this._pending = { type: 'act', ref: ref };
+    openDayPicker('📅 Vilken dag passar ' + esc(a.name) + '?');
+  },
+  pickDay(ds){
+    const p = this._pending;
+    this._pending = null;
+    this.closeModal();
+    if(!p) return;
+    const d = parseDate(ds);
+    if(p.type === 'meal'){
+      const m = getMeal(p.ref);
+      if(m){
+        state.mealPlan[ds] = { name: m.name, emoji: m.emoji };
+        toast(m.emoji + ' ' + m.name + ' planerad ' + shortDate(d));
+      }
+    } else if(p.type === 'act'){
+      const a = getActivity(p.ref);
+      if(a){
+        if(!state.plannedActivities[ds]) state.plannedActivities[ds] = [];
+        state.plannedActivities[ds].push({ id: uid(), emoji: a.emoji, name: a.name });
+        toast(a.emoji + ' ' + a.name + ' planerad ' + shortDate(d));
+      }
+    }
+    save(); renderAll();
+  },
+
+  /* ---- Mat ---- */
+  mealToList(ref){
+    const m = getMeal(ref);
+    if(!m) return;
+    let added = 0;
+    for(const ing of m.ing){
+      const exists = state.shopping.some(it => !it.done && it.text.toLowerCase() === ing.toLowerCase());
+      if(!exists){ state.shopping.push({ id: uid(), text: ing, done: false }); added++; }
+    }
+    save(); renderAll();
+    toast(added ? '🛒 ' + added + ' varor tillagda i inköpslistan' : '🛒 Allt fanns redan i listan');
+  },
+  addCustomMeal(){
+    const nameEl = document.getElementById('newMealName');
+    const ingEl = document.getElementById('newMealIng');
+    const name = (nameEl.value || '').trim();
+    if(!name){ toast('Skriv ett namn på maträtten först'); return; }
+    const ing = (ingEl.value || '').split(',').map(s => s.trim()).filter(Boolean);
+    state.customMeals.push({ id: 'cm' + uid(), emoji: '⭐', name: name, ing: ing });
+    nameEl.value = ''; ingEl.value = '';
+    save(); renderAll();
+    toast('⭐ ' + name + ' tillagd bland förslagen');
+  },
+  removeCustomMeal(id){
+    state.customMeals = state.customMeals.filter(m => m.id !== id);
+    save(); renderAll();
+  },
+  shopAdd(){
+    const input = document.getElementById('shopInput');
+    const v = (input.value || '').trim();
+    if(!v) return;
+    state.shopping.push({ id: uid(), text: v, done: false });
+    input.value = '';
+    save(); renderAll();
+    document.getElementById('shopInput').focus();
+  },
+  shopToggle(id){
+    const it = state.shopping.find(i => i.id === id);
+    if(it){ it.done = !it.done; save(); renderAll(); }
+  },
+  shopRemove(id){
+    state.shopping = state.shopping.filter(i => i.id !== id);
+    save(); renderAll();
+  },
+  shopClearDone(){
+    const n = state.shopping.filter(i => i.done).length;
+    state.shopping = state.shopping.filter(i => !i.done);
+    save(); renderAll();
+    if(n) toast('🧹 ' + n + ' avklarade varor borttagna');
+  },
+
+  /* ---- Aktiviteter ---- */
+  setActFilter(f){ this.actFilter = f; renderAkt(); },
+  addCustomActivity(){
+    const nameEl = document.getElementById('newActName');
+    const name = (nameEl.value || '').trim();
+    if(!name){ toast('Skriv ett namn på aktiviteten först'); return; }
+    const tags = [];
+    if(document.getElementById('newActUte').checked) tags.push('ute');
+    if(document.getElementById('newActInne').checked) tags.push('inne');
+    if(document.getElementById('newActGratis').checked) tags.push('gratis');
+    state.customActivities.push({ id: 'ca' + uid(), emoji: '⭐', name: name, tags: tags });
+    nameEl.value = '';
+    document.getElementById('newActUte').checked = false;
+    document.getElementById('newActInne').checked = false;
+    document.getElementById('newActGratis').checked = false;
+    save(); renderAll();
+    toast('⭐ ' + name + ' tillagd bland förslagen');
+  },
+  removeCustomActivity(id){
+    state.customActivities = state.customActivities.filter(a => a.id !== id);
+    save(); renderAll();
+  },
+
+  /* ---- Städ ---- */
+  cleanToggle(taskId){
+    const wk = weekKey(todayDate());
+    if(!state.cleaningDone[wk]) state.cleaningDone[wk] = {};
+    if(state.cleaningDone[wk][taskId]) delete state.cleaningDone[wk][taskId];
+    else state.cleaningDone[wk][taskId] = true;
+    /* rensa gamla veckor (behåll 8 senaste nycklarna) */
+    const keys = Object.keys(state.cleaningDone).sort();
+    while(keys.length > 8){ delete state.cleaningDone[keys.shift()]; }
+    save();
+    const todayTasks = state.cleaningTasks.filter(t => t.day === wIdx(todayDate()));
+    const allDone = todayTasks.length && todayTasks.every(t => state.cleaningDone[wk][t.id]);
+    renderAll();
+    if(allDone && state.cleaningDone[wk][taskId]) toast('🎉 Dagens städning klar – bra jobbat!');
+  },
+  cleanEdit(){
+    this.cleanEditMode = !this.cleanEditMode;
+    renderStad();
+  },
+  cleanAdd(){
+    const nameEl = document.getElementById('newCleanName');
+    const dayEl = document.getElementById('newCleanDay');
+    const name = (nameEl.value || '').trim();
+    if(!name){ toast('Skriv vad som ska göras först'); return; }
+    state.cleaningTasks.push({ id: 'ct' + uid(), name: name, day: Number(dayEl.value) });
+    nameEl.value = '';
+    save(); renderStad(); renderToday();
+    toast('🧹 Uppgift tillagd');
+  },
+  cleanRemove(id){
+    state.cleaningTasks = state.cleaningTasks.filter(t => t.id !== id);
+    save(); renderStad(); renderToday();
+  },
+
+  /* ---- Barn & gympa ---- */
+  childAdd(){
+    const input = document.getElementById('childName');
+    const name = (input.value || '').trim();
+    if(!name){ toast('Skriv barnets namn först'); return; }
+    state.children.push({
+      id: 'k' + uid(),
+      name: name,
+      color: KID_COLORS[state.children.length % KID_COLORS.length],
+      gympa: []
+    });
+    input.value = '';
+    save(); renderAll();
+    toast('💛 ' + name + ' tillagd');
+  },
+  childRemove(id){
+    const c = state.children.find(x => x.id === id);
+    if(!c) return;
+    if(!confirm('Ta bort ' + c.name + '?')) return;
+    state.children = state.children.filter(x => x.id !== id);
+    save(); renderAll();
+  },
+  childGympa(id, day){
+    const c = state.children.find(x => x.id === id);
+    if(!c) return;
+    if(!c.gympa) c.gympa = [];
+    if(c.gympa.includes(day)) c.gympa = c.gympa.filter(d => d !== day);
+    else c.gympa.push(day);
+    save(); renderAll();
+    checkNotifications();
+  },
+
+  /* ---- Notiser & data ---- */
+  notifRequest(){
+    if(!('Notification' in window)){ toast('Notiser stöds inte i den här webbläsaren'); return; }
+    Notification.requestPermission().then(p => {
+      renderMer();
+      if(p === 'granted'){ toast('🔔 Notiser aktiverade'); checkNotifications(); }
+      else if(p === 'denied'){ toast('Notiser blockerades av webbläsaren'); }
+    });
+  },
+  exportData(){
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'vardagskoll-backup-' + fmtDate(todayDate()) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('💾 Säkerhetskopia nedladdad');
+  },
+  importFile(input){
+    const file = input.files && input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(typeof data !== 'object' || data === null || !Array.isArray(data.children)) throw new Error('fel format');
+        state = Object.assign(defaultState(), data);
+        save(); renderAll();
+        toast('✅ Data återställd från säkerhetskopia');
+      }catch(e){
+        toast('⚠️ Kunde inte läsa filen – är det rätt fil?');
+      }
+      input.value = '';
+    };
+    reader.readAsText(file);
+  },
+  resetAll(){
+    if(!confirm('Vill du verkligen radera ALL data i appen? Det går inte att ångra.')) return;
+    localStorage.removeItem(LS_KEY);
+    state = defaultState();
+    state.cleaningTasks = DEFAULT_CLEANING.map(t => Object.assign({}, t));
+    save(); renderAll();
+    toast('Appen är nollställd');
+  },
+
+  closeModal(){
+    document.getElementById('overlay').classList.remove('open');
+    this._pending = null;
+  }
+};
+
+function openModal(html){
+  document.getElementById('sheet').innerHTML = html;
+  document.getElementById('overlay').classList.add('open');
+}
+function openDayPicker(title){
+  const t = todayDate();
+  let btns = '';
+  for(let i = 0; i < 14; i++){
+    const d = addDays(t, i);
+    const ds = fmtDate(d);
+    const label = i === 0 ? 'Idag' : (i === 1 ? 'Imorgon' : cap(WDAYS[wIdx(d)]));
+    btns += '<button onclick="App.pickDay(\'' + ds + '\')">' +
+      (hasKids(ds) ? '💛 ' : '') + label +
+      '<span class="sub">' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' · v.' + isoWeekInfo(d).week + '</span></button>';
+  }
+  openModal(
+    '<div class="sheet-head"><h3>' + title + '</h3>' +
+    '<button class="close" onclick="App.closeModal()">✕</button></div>' +
+    '<p class="muted small" style="margin-top:0">💛 = dagar du har barnen</p>' +
+    '<div class="daypick">' + btns + '</div>'
+  );
+}
+
+/* ================= Render ================= */
+function renderAll(){
+  renderHeader();
+  renderToday();
+  renderCal();
+  renderMat();
+  renderAkt();
+  renderStad();
+  renderMer();
+}
+
+function renderHeader(){
+  const t = todayDate();
+  document.getElementById('headerDate').textContent = cap(humanDate(t)) + ' · v.' + isoWeekInfo(t).week;
+}
+
+/* ---- Idag ---- */
+function renderToday(){
+  const t = todayDate();
+  const ts = fmtDate(t);
+  const tomorrow = addDays(t, 1);
+  const custodyToday = hasKids(ts);
+  const custodyTomorrow = hasKids(fmtDate(tomorrow));
+  let html = '';
+
+  /* Kom igång-hjälp */
+  if(!state.children.length){
+    html += '<div class="card">' +
+      '<h2>👋 Välkommen till Vardagskoll!</h2>' +
+      '<p class="small">Appen som hjälper dig hålla koll på vardagen – ett steg i taget.</p>' +
+      '<ol class="small" style="padding-left:20px; margin:8px 0;">' +
+      '<li>Lägg till dina barn under <b>Mer</b></li>' +
+      '<li>Bocka i deras gympadagar så påminner appen dig 1 och 2 dagar innan</li>' +
+      '<li>Markera i <b>Kalendern</b> exakt vilka dagar barnen är hos dig</li>' +
+      '</ol>' +
+      '<button class="btn full" onclick="App.go(\'mer\')">⚙️ Kom igång – lägg till barn</button>' +
+      '</div>';
+  }
+
+  /* Barnen idag */
+  html += '<div class="card">' +
+    '<h2>' + (custodyToday ? '💛 Barnen är hos dig idag' : '🤍 Barnfri dag idag') + '</h2>' +
+    '<p class="small muted" style="margin:0">Imorgon (' + WDAYS[wIdx(tomorrow)] + '): ' +
+    (custodyTomorrow ? 'barnen hos dig 💛' : 'barnfri 🤍') +
+    ' &nbsp;·&nbsp; <a href="#" onclick="App.go(\'kal\');return false" style="color:var(--accent);font-weight:700">Ändra i kalendern</a></p>' +
+    '</div>';
+
+  /* Påminnelser */
+  const rems = gympaReminders(state.children);
+  if(rems.length){
+    html += '<div class="card"><h2>🔔 Påminnelser</h2>' +
+      rems.map(r => '<div class="reminder"><span class="ic">' + (r.off === 0 ? '🤸' : '👟') + '</span><span>' + esc(reminderText(r)) + '</span></div>').join('') +
+      '</div>';
+  }
+
+  /* Middag idag */
+  const meal = state.mealPlan[ts];
+  html += '<div class="card"><h2>🍽️ Middag idag</h2>';
+  if(meal){
+    html += '<p style="font-size:18px; font-weight:800; margin:4px 0 10px">' + meal.emoji + ' ' + esc(meal.name) + '</p>' +
+      '<button class="btn small subtle" onclick="App.openDay(\'' + ts + '\')">Ändra</button>';
+  } else {
+    html += '<p class="empty">Ingen middag planerad ännu.</p>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+      '<button class="btn small" onclick="App.openDay(\'' + ts + '\')">Välj middag</button>' +
+      '<button class="btn small ghost" onclick="App.go(\'mat\')">Bläddra bland förslag</button></div>';
+  }
+  html += '</div>';
+
+  /* Aktiviteter idag */
+  const acts = state.plannedActivities[ts] || [];
+  html += '<div class="card"><h2>🎈 Aktiviteter idag</h2>';
+  if(acts.length){
+    html += acts.map(a => '<div class="task"><span class="txt">' + a.emoji + ' ' + esc(a.name) + '</span>' +
+      '<button class="x" title="Ta bort" onclick="App.removeDayActivity(\'' + ts + '\',\'' + a.id + '\')">✕</button></div>').join('');
+  } else {
+    html += '<p class="empty">Inget planerat.</p>' +
+      '<button class="btn small ghost" onclick="App.go(\'akt\')">Hitta något kul</button>';
+  }
+  html += '</div>';
+
+  /* Städ idag */
+  const wk = weekKey(t);
+  const doneMap = state.cleaningDone[wk] || {};
+  const todayTasks = state.cleaningTasks.filter(x => x.day === wIdx(t));
+  html += '<div class="card"><h2>🧹 Städ idag <span class="sub">(' + cap(WDAYS[wIdx(t)]) + ')</span></h2>';
+  if(todayTasks.length){
+    const doneCount = todayTasks.filter(x => doneMap[x.id]).length;
+    html += todayTasks.map(x =>
+      '<label class="task ' + (doneMap[x.id] ? 'done' : '') + '">' +
+      '<input type="checkbox" ' + (doneMap[x.id] ? 'checked' : '') + ' onchange="App.cleanToggle(\'' + x.id + '\')">' +
+      '<span class="txt">' + esc(x.name) + '</span></label>'
+    ).join('');
+    if(doneCount === todayTasks.length){
+      html += '<p class="small" style="color:var(--green); font-weight:800; margin:8px 0 0">🎉 Allt klart för idag!</p>';
+    }
+  } else {
+    html += '<p class="empty">Inga städuppgifter idag – njut! 😌</p>';
+  }
+  html += '</div>';
+
+  /* Inköpslistan */
+  const left = state.shopping.filter(i => !i.done).length;
+  html += '<button class="biglink" onclick="App.go(\'mat\')"><span>🛒 Inköpslistan</span>' +
+    '<span class="muted">' + (left ? left + ' varor kvar ›' : 'tom ›') + '</span></button>';
+
+  document.getElementById('view-idag').innerHTML = html;
+}
+
+/* ---- Kalender ---- */
+function renderCal(){
+  const y = App.calY, m = App.calM;
+  const t = todayDate(); const ts = fmtDate(t);
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0);
+  const start = mondayOf(first);
+  const end = addDays(mondayOf(last), 6);
+
+  let grid = '<div class="cal-grid">';
+  grid += '<div class="wd">v.</div>';
+  for(const wd of WDAYS_SHORT) grid += '<div class="wd">' + wd + '</div>';
+
+  let d = start;
+  while(d <= end){
+    const w = isoWeekInfo(d).week;
+    grid += '<button class="wk" title="Markera/avmarkera hela veckan" onclick="App.toggleWeekCustody(\'' + fmtDate(d) + '\')">' + w + '</button>';
+    for(let i = 0; i < 7; i++){
+      const ds = fmtDate(d);
+      const classes = ['cell'];
+      if(d.getMonth() !== m) classes.push('out');
+      if(hasKids(ds)) classes.push('custody');
+      if(ds === ts) classes.push('today');
+      let marks = '';
+      const wd = wIdx(d);
+      for(const c of state.children){
+        if(c.gympa && c.gympa.includes(wd)) marks += '<span class="dot" style="background:' + c.color + '" title="' + esc(c.name) + ' har gympa"></span>';
+      }
+      if(state.mealPlan[ds]) marks += '<span class="mk" title="Middag planerad">🍽️</span>';
+      if(state.plannedActivities[ds] && state.plannedActivities[ds].length) marks += '<span class="mk" title="Aktivitet planerad">🎈</span>';
+      grid += '<button class="' + classes.join(' ') + '" onclick="App.openDay(\'' + ds + '\')">' +
+        (hasKids(ds) ? '<span class="heart">💛</span>' : '') +
+        '<span class="num">' + d.getDate() + '</span>' +
+        '<span class="marks">' + marks + '</span></button>';
+      d = addDays(d, 1);
+    }
+  }
+  grid += '</div>';
+
+  let legend = '<div class="legend">' +
+    '<span>💛 barnen hos dig</span><span>🍽️ middag</span><span>🎈 aktivitet</span>';
+  for(const c of state.children){
+    if(c.gympa && c.gympa.length) legend += '<span><span class="dot" style="background:' + c.color + '"></span>' + esc(c.name) + 's gympa</span>';
+  }
+  legend += '</div>';
+
+  document.getElementById('view-kal').innerHTML =
+    '<div class="card">' +
+    '<div class="cal-head">' +
+    '<div class="title">' + MONTHS[m] + ' ' + y + '</div>' +
+    '<div class="cal-nav">' +
+    '<button class="btn small subtle" onclick="App.calShift(-1)">‹</button>' +
+    '<button class="btn small subtle" onclick="App.calGoToday()">Idag</button>' +
+    '<button class="btn small subtle" onclick="App.calShift(1)">›</button>' +
+    '</div></div>' +
+    grid + legend +
+    '<p class="small muted" style="margin-bottom:0">Tryck på en <b>dag</b> för detaljer och för att markera att du har barnen. ' +
+    'Tryck på ett <b>veckonummer</b> för att markera hela veckan på en gång.</p>' +
+    '</div>';
+}
+
+/* ---- Mat ---- */
+function renderMat(){
+  const t = todayDate();
+  let html = '';
+
+  /* Kommande middagar */
+  let rows = '';
+  for(let i = 0; i < 7; i++){
+    const d = addDays(t, i);
+    const ds = fmtDate(d);
+    const meal = state.mealPlan[ds];
+    rows += '<div class="plan-row">' +
+      '<span class="d">' + (i === 0 ? 'Idag' : cap(WDAYS_SHORT[wIdx(d)])) + '<span class="sub">' + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0,3) + '</span></span>' +
+      '<span class="heart">' + (hasKids(ds) ? '💛' : '<span class="muted">–</span>') + '</span>' +
+      '<span class="what">' + (meal ? meal.emoji + ' ' + esc(meal.name) : '<span class="muted">Ingen middag vald</span>') + '</span>' +
+      '<button class="btn small subtle" onclick="App.openDay(\'' + ds + '\')">' + (meal ? 'Ändra' : 'Välj') + '</button>' +
+      '</div>';
+  }
+  html += '<div class="card"><h2>📅 Veckans middagar <span class="sub">(7 dagar framåt · 💛 = barnen hos dig)</span></h2>' + rows + '</div>';
+
+  /* Inköpslista */
+  const items = state.shopping;
+  const doneCount = items.filter(i => i.done).length;
+  html += '<div class="card"><h2>🛒 Inköpslistan <span class="sub">(' + (items.length - doneCount) + ' kvar)</span></h2>';
+  if(items.length){
+    html += items.map(i =>
+      '<label class="task ' + (i.done ? 'done' : '') + '">' +
+      '<input type="checkbox" ' + (i.done ? 'checked' : '') + ' onchange="App.shopToggle(\'' + i.id + '\')">' +
+      '<span class="txt">' + esc(i.text) + '</span>' +
+      '<button class="x" title="Ta bort" onclick="App.shopRemove(\'' + i.id + '\')">✕</button></label>'
+    ).join('');
+  } else {
+    html += '<p class="empty">Listan är tom. Lägg till varor nedan eller tryck 🛒 på ett matförslag.</p>';
+  }
+  html += '<div class="inline-form"><input type="text" id="shopInput" placeholder="Lägg till vara…" onkeydown="if(event.key===\'Enter\')App.shopAdd()">' +
+    '<button class="btn small" onclick="App.shopAdd()">Lägg till</button></div>';
+  if(doneCount) html += '<button class="btn small subtle" style="margin-top:10px" onclick="App.shopClearDone()">Rensa avklarade (' + doneCount + ')</button>';
+  html += '</div>';
+
+  /* Matförslag */
+  const mealCard = m =>
+    '<div class="sugg">' +
+    '<span class="name">' + m.emoji + ' ' + esc(m.name) + '</span>' +
+    '<span class="ing">' + m.ing.map(esc).join(', ') + '</span>' +
+    '<div class="row">' +
+    '<button class="btn small ghost" onclick="App.mealToList(\'' + m.id + '\')">🛒 Till listan</button>' +
+    '<button class="btn small" onclick="App.planMeal(\'' + m.id + '\')">📅 Planera</button>' +
+    '</div>' +
+    (m.id.startsWith('cm') ? '<button class="rm" onclick="App.removeCustomMeal(\'' + m.id + '\')">Ta bort förslag</button>' : '') +
+    '</div>';
+
+  html += '<div class="card"><h2>💡 Matförslag <span class="sub">– tryck 🛒 så hamnar ingredienserna i listan</span></h2>' +
+    '<div class="sugg-grid">' + allMeals().map(mealCard).join('') + '</div>' +
+    '<div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">' +
+    '<p class="small" style="margin:0 0 8px; font-weight:700">⭐ Lägg till eget förslag</p>' +
+    '<input type="text" id="newMealName" placeholder="Maträttens namn" style="margin-bottom:8px">' +
+    '<div class="inline-form" style="margin-top:0"><input type="text" id="newMealIng" placeholder="Ingredienser, separera med komma">' +
+    '<button class="btn small" onclick="App.addCustomMeal()">Spara</button></div>' +
+    '</div></div>';
+
+  document.getElementById('view-mat').innerHTML = html;
+}
+
+/* ---- Aktiviteter ---- */
+function renderAkt(){
+  const t = todayDate();
+  let html = '';
+
+  /* Planerade aktiviteter framåt */
+  const upcoming = [];
+  const dates = Object.keys(state.plannedActivities).sort();
+  for(const ds of dates){
+    if(ds < fmtDate(t)) continue;
+    for(const a of state.plannedActivities[ds]) upcoming.push({ ds: ds, a: a });
+  }
+  html += '<div class="card"><h2>🗓️ Planerade aktiviteter</h2>';
+  if(upcoming.length){
+    html += upcoming.slice(0, 12).map(u => {
+      const d = parseDate(u.ds);
+      return '<div class="plan-row">' +
+        '<span class="d">' + shortDate(d) + (hasKids(u.ds) ? '<span class="sub">💛 barnen hos dig</span>' : '') + '</span>' +
+        '<span class="what">' + u.a.emoji + ' ' + esc(u.a.name) + '</span>' +
+        '<button class="x" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:16px" title="Ta bort" ' +
+        'onclick="App.removeDayActivity(\'' + u.ds + '\',\'' + u.a.id + '\')">✕</button></div>';
+    }).join('');
+  } else {
+    html += '<p class="empty">Inget planerat ännu – välj något kul nedan! 👇</p>';
+  }
+  html += '</div>';
+
+  /* Förslag med filter */
+  const f = App.actFilter;
+  const filters = [['alla','Alla'],['ute','🌳 Ute'],['inne','🏠 Inne'],['gratis','🆓 Gratis']];
+  const chips = filters.map(x =>
+    '<button class="chip ' + (f === x[0] ? 'on' : '') + '" onclick="App.setActFilter(\'' + x[0] + '\')">' + x[1] + '</button>'
+  ).join('');
+
+  const list = allActivities().filter(a => f === 'alla' || (a.tags && a.tags.includes(f)));
+  const actCard = a =>
+    '<div class="sugg">' +
+    '<span class="name">' + a.emoji + ' ' + esc(a.name) + '</span>' +
+    '<span class="tags">' + (a.tags || []).map(tg => '<span class="tag">' + esc(tg) + '</span>').join('') + '</span>' +
+    '<div class="row"><button class="btn small" onclick="App.planActivity(\'' + a.id + '\')">📅 Planera</button></div>' +
+    (a.id.startsWith('ca') ? '<button class="rm" onclick="App.removeCustomActivity(\'' + a.id + '\')">Ta bort förslag</button>' : '') +
+    '</div>';
+
+  html += '<div class="card"><h2>💡 Aktivitetsförslag</h2>' +
+    '<div class="filters">' + chips + '</div>' +
+    (list.length ? '<div class="sugg-grid">' + list.map(actCard).join('') + '</div>' : '<p class="empty">Inga förslag matchar filtret.</p>') +
+    '<div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">' +
+    '<p class="small" style="margin:0 0 8px; font-weight:700">⭐ Lägg till eget förslag</p>' +
+    '<div class="inline-form" style="margin-top:0"><input type="text" id="newActName" placeholder="Aktivitetens namn">' +
+    '<button class="btn small" onclick="App.addCustomActivity()">Spara</button></div>' +
+    '<p class="small" style="margin:8px 0 0; display:flex; gap:14px; flex-wrap:wrap">' +
+    '<label><input type="checkbox" id="newActUte"> 🌳 Ute</label>' +
+    '<label><input type="checkbox" id="newActInne"> 🏠 Inne</label>' +
+    '<label><input type="checkbox" id="newActGratis"> 🆓 Gratis</label></p>' +
+    '</div></div>';
+
+  document.getElementById('view-akt').innerHTML = html;
+}
+
+/* ---- Städ ---- */
+function renderStad(){
+  const t = todayDate();
+  const wk = weekKey(t);
+  const doneMap = state.cleaningDone[wk] || {};
+  const tasks = state.cleaningTasks;
+  const doneCount = tasks.filter(x => doneMap[x.id]).length;
+  const pct = tasks.length ? Math.round(100 * doneCount / tasks.length) : 0;
+
+  let html = '<div class="card">' +
+    '<h2>🧹 Veckans städning <span class="sub">v.' + isoWeekInfo(t).week + '</span></h2>' +
+    '<div class="bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+    '<p class="small muted" style="margin:0 0 6px">' + doneCount + ' av ' + tasks.length + ' klara · listan nollställs varje måndag</p>';
+
+  for(let day = 0; day < 7; day++){
+    const dayTasks = tasks.filter(x => x.day === day);
+    if(!dayTasks.length && !App.cleanEditMode) continue;
+    const isToday = day === wIdx(t);
+    html += '<p style="margin:14px 0 2px; font-weight:800; font-size:14.5px; ' + (isToday ? 'color:var(--accent-dark)' : '') + '">' +
+      cap(WDAYS[day]) + (isToday ? ' · idag' : '') + '</p>';
+    if(dayTasks.length){
+      html += dayTasks.map(x =>
+        '<label class="task ' + (doneMap[x.id] ? 'done' : '') + '">' +
+        '<input type="checkbox" ' + (doneMap[x.id] ? 'checked' : '') + ' onchange="App.cleanToggle(\'' + x.id + '\')">' +
+        '<span class="txt">' + esc(x.name) + '</span>' +
+        (App.cleanEditMode ? '<button class="x" title="Ta bort" onclick="event.preventDefault();App.cleanRemove(\'' + x.id + '\')">✕</button>' : '') +
+        '</label>'
+      ).join('');
+    } else {
+      html += '<p class="empty" style="padding:2px">–</p>';
+    }
+  }
+
+  html += '<div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">';
+  if(App.cleanEditMode){
+    html += '<p class="small" style="margin:0 0 8px; font-weight:700">➕ Ny uppgift</p>' +
+      '<input type="text" id="newCleanName" placeholder="Vad ska göras?" style="margin-bottom:8px" onkeydown="if(event.key===\'Enter\')App.cleanAdd()">' +
+      '<div class="inline-form" style="margin-top:0">' +
+      '<select id="newCleanDay">' + WDAYS.map((w, i) => '<option value="' + i + '">' + cap(w) + '</option>').join('') + '</select>' +
+      '<button class="btn small" onclick="App.cleanAdd()">Lägg till</button></div>' +
+      '<button class="btn small subtle" style="margin-top:10px" onclick="App.cleanEdit()">Klar med redigering</button>';
+  } else {
+    html += '<button class="btn small subtle" onclick="App.cleanEdit()">✏️ Redigera schemat</button>';
+  }
+  html += '</div></div>';
+
+  document.getElementById('view-stad').innerHTML = html;
+}
+
+/* ---- Mer / Inställningar ---- */
+function renderMer(){
+  let html = '';
+
+  /* Installera som app */
+  html += '<div class="card"><h2>📲 Vardagskoll som app</h2>';
+  if(isStandalone()){
+    html += '<p class="small" style="color:var(--green); font-weight:800; margin:0">✅ Du använder appen installerad – som en riktig app!</p>';
+  } else if(deferredInstallPrompt){
+    html += '<p class="small muted">Lägg Vardagskoll på hemskärmen så öppnas den som en egen app, utan webbläsarfält – och fungerar även utan uppkoppling.</p>' +
+      '<button class="btn full" onclick="App.installApp()">📲 Installera appen</button>';
+  } else {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/.test(ua);
+    html += '<p class="small muted">Lägg Vardagskoll på hemskärmen så öppnas den som en egen app, utan webbläsarfält – och fungerar även utan uppkoppling.</p>' +
+      (isIOS
+        ? '<p class="small">📤 Tryck på <b>Dela</b>-ikonen i Safari och välj <b>"Lägg till på hemskärmen"</b>.</p>'
+        : '<p class="small">⋮ Öppna webbläsarens meny och välj <b>"Lägg till på hemskärmen"</b> eller <b>"Installera app"</b>.</p>');
+  }
+  html += '</div>';
+
+  /* Barn */
+  html += '<div class="card"><h2>🧒 Barn & gympadagar</h2>';
+  if(state.children.length){
+    html += state.children.map(c => {
+      const days = WDAYS_SHORT.map((w, i) => {
+        const on = c.gympa && c.gympa.includes(i);
+        return '<button class="chip day ' + (on ? 'on' : '') + '" ' +
+          (on ? 'style="background:' + c.color + '22; border-color:' + c.color + '; color:' + c.color + '"' : '') +
+          ' onclick="App.childGympa(\'' + c.id + '\',' + i + ')" title="' + cap(WDAYS[i]) + '">' + w.slice(0,2) + '</button>';
+      }).join('');
+      return '<div class="kid-row">' +
+        '<span class="kid-dot" style="background:' + c.color + '"></span>' +
+        '<span class="kid-name">' + esc(c.name) + '</span>' +
+        '<button class="btn small danger" onclick="App.childRemove(\'' + c.id + '\')">Ta bort</button>' +
+        '<div class="gympa-days">' + days + '</div>' +
+        '<p class="small muted" style="margin:0; width:100%">👟 Bocka i vilka dagar ' + esc(c.name) + ' har gympa – du påminns 1 och 2 dagar innan.</p>' +
+        '</div>';
+    }).join('');
+  } else {
+    html += '<p class="empty">Inga barn tillagda ännu.</p>';
+  }
+  html += '<div class="inline-form"><input type="text" id="childName" placeholder="Barnets namn" onkeydown="if(event.key===\'Enter\')App.childAdd()">' +
+    '<button class="btn small" onclick="App.childAdd()">Lägg till</button></div></div>';
+
+  /* Notiser */
+  html += '<div class="card"><h2>🔔 Notiser</h2>';
+  if(!('Notification' in window)){
+    html += '<p class="small muted">Den här webbläsaren stöder inte notiser, men påminnelser visas alltid under <b>Idag</b>.</p>';
+  } else if(Notification.permission === 'granted'){
+    html += '<p class="small" style="color:var(--green); font-weight:800">✅ Notiser är på</p>' +
+      '<p class="small muted" style="margin-bottom:0">Du får en notis 1 och 2 dagar före varje gympadag. Säkrast fungerar det när du öppnar appen då och då – på Android (installerad app) försöker den även påminna dig i bakgrunden. Påminnelserna syns alltid under <b>Idag</b> också.</p>';
+  } else if(Notification.permission === 'denied'){
+    html += '<p class="small muted">Notiser är blockerade i webbläsarens inställningar. Ingen fara – påminnelserna visas alltid under <b>Idag</b>.</p>';
+  } else {
+    html += '<p class="small muted">Slå på notiser så säger appen till 1 och 2 dagar före varje gympadag.</p>' +
+      '<button class="btn" onclick="App.notifRequest()">🔔 Aktivera notiser</button>';
+  }
+  html += '</div>';
+
+  /* Data */
+  html += '<div class="card"><h2>💾 Din data</h2>' +
+    '<p class="small muted">Allt sparas lokalt på den här enheten. Ta en säkerhetskopia ibland!</p>' +
+    '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+    '<button class="btn small ghost" onclick="App.exportData()">⬇️ Säkerhetskopiera</button>' +
+    '<label class="btn small ghost" style="cursor:pointer">⬆️ Återställ kopia<input type="file" accept=".json,application/json" style="display:none" onchange="App.importFile(this)"></label>' +
+    '<button class="btn small danger" onclick="App.resetAll()">🗑️ Nollställ appen</button>' +
+    '</div></div>';
+
+  html += '<p class="center small muted">Vardagskoll 🧡 – en lugn liten app för din vardag.<br>Ett steg i taget räcker gott.</p>';
+
+  document.getElementById('view-mer').innerHTML = html;
+}
+
+/* ================= Notiser ================= */
+function checkNotifications(){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const ts = fmtDate(todayDate());
+  let changed = false;
+  for(const r of gympaReminders(state.children)){
+    if(r.off === 0) continue; /* notis skickas 1 och 2 dagar innan */
+    const key = 'g-' + r.child.id + '-' + fmtDate(r.date) + '-' + r.off;
+    if(state.notified[key]) continue;
+    fireNotification('Vardagskoll – gympapåminnelse', reminderText(r), key);
+    state.notified[key] = ts;
+    changed = true;
+  }
+  /* städa gamla nycklar */
+  const limit = fmtDate(addDays(todayDate(), -14));
+  for(const k of Object.keys(state.notified)){
+    if(state.notified[k] < limit){ delete state.notified[k]; changed = true; }
+  }
+  if(changed){ save(); syncReminderDataToIDB(); }
+}
+function fireNotification(title, body, tag){
+  const opts = { body: body, icon: 'icon-192.png', badge: 'icon-192.png', tag: tag };
+  if(navigator.serviceWorker && navigator.serviceWorker.controller){
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts)).catch(() => {
+      try{ new Notification(title, opts); }catch(e){}
+    });
+  } else {
+    try{ new Notification(title, opts); }catch(e){}
+  }
+}
+
+/* ================= PWA: installation, offline, bakgrundskontroll ================= */
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  renderMer();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  toast('🎉 Vardagskoll är installerad!');
+  renderMer();
+});
+function isStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+async function installApp(){
+  if(!deferredInstallPrompt){ toast('Använd webbläsarens meny → "Lägg till på hemskärmen"'); return; }
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  renderMer();
+}
+App.installApp = installApp;
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      /* Bästa-möjliga-försök: be om periodisk bakgrundskörning (bara Chrome/Edge på Android, installerad app). */
+      if('periodicSync' in reg && navigator.permissions){
+        navigator.permissions.query({ name: 'periodic-background-sync' }).then(status => {
+          if(status.state === 'granted'){
+            reg.periodicSync.register('gympa-check', { minInterval: 12 * 60 * 60 * 1000 }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+      if('sync' in reg){ reg.sync.register('gympa-check').catch(() => {}); }
+    }).catch(() => { /* offline/installerbart stöd saknas – appen funkar ändå i webbläsaren */ });
+  });
+}
+
+/* ================= Start ================= */
+load();
+syncReminderDataToIDB();
+App.go('idag');
+checkNotifications();
+
+let lastDay = fmtDate(todayDate());
+setInterval(() => {
+  const now = fmtDate(todayDate());
+  if(now !== lastDay){ lastDay = now; renderAll(); }
+  checkNotifications();
+}, 60000);
+</script>
+</body>
+</html>
