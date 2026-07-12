@@ -1,11 +1,11 @@
 /* Service worker för Vardagskoll — gör appen installerbar och offline-bar. */
-importScripts('./shared.js');
+importScripts('./shared.js?v=3');
 
-const CACHE_VERSION = 'vardagskoll-v2';
+const CACHE_VERSION = 'vardagskoll-v3';
 const APP_SHELL = [
   './',
   './index.html',
-  './shared.js',
+  './shared.js?v=3',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -43,7 +43,13 @@ self.addEventListener('fetch', event => {
         caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy));
         return res;
       })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+      .catch(() => caches.match(event.request).then(cached => {
+        if(cached) return cached;
+        /* index.html som reserv ENDAST för sidnavigeringar — aldrig för
+           skript/bilder, annars serveras HTML som JavaScript och appen kraschar */
+        if(event.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      }))
   );
 });
 

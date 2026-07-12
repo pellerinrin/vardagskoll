@@ -18,7 +18,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vardagskoll">
 
-<script src="shared.js"></script>
+<script src="shared.js?v=3"></script>
 <style>
   :root{
     --bg:#faf6f0;
@@ -308,6 +308,11 @@
    (delas med service workern så bakgrundskontroller använder samma regler). */
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* Skyddsnät om en äldre shared.js råkar ligga kvar i en cache: appen ska
+   aldrig bli blank för att en delad hjälpfunktion saknas. */
+if(typeof sharedEventsOn !== 'function'){ window.sharedEventsOn = function(){ return []; }; }
+if(typeof loadSharedEvents !== 'function'){ window.loadSharedEvents = function(){ return {}; }; }
 
 /* ================= Förslag (inbyggda) ================= */
 const SUGGESTED_MEALS = [
@@ -1051,13 +1056,18 @@ function openDayPicker(title){
 
 /* ================= Render ================= */
 function renderAll(){
-  renderHeader();
-  renderToday();
-  renderCal();
-  renderMat();
-  renderAkt();
-  renderStad();
-  renderMer();
+  /* varje vy ritas för sig — kraschar en får de andra ändå visas,
+     så appen aldrig blir helt blank */
+  const parts = [renderHeader, renderToday, renderCal, renderMat, renderAkt, renderStad, renderMer];
+  let failed = null;
+  for(const fn of parts){
+    try{ fn(); }
+    catch(e){ failed = e; }
+  }
+  if(failed && !renderAll._warned){
+    renderAll._warned = true;
+    toast('⚠️ En del av appen kunde inte visas – din data är kvar. Prova att stänga och öppna appen igen.');
+  }
 }
 
 function renderHeader(){
