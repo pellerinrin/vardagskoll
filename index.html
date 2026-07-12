@@ -131,6 +131,12 @@
   .bar{height:10px; background:#f1e9dc; border-radius:999px; overflow:hidden; margin:8px 0 4px;}
   .bar .fill{height:100%; background:var(--green); border-radius:999px; transition:width .3s ease;}
 
+  /* städschema: redigeringsläge */
+  .task-edit{display:flex; align-items:center; gap:6px; padding:4px 0;}
+  .task-edit input[type=text]{flex:1; min-width:0; min-height:38px; padding:7px 10px; font-size:14px;}
+  .task-edit select{width:auto; min-height:38px; padding:7px 8px; font-size:13.5px; flex-shrink:0;}
+  .task-edit .x{background:none; border:none; color:#c0392b; font-size:17px; cursor:pointer; padding:4px 6px; flex-shrink:0;}
+
   /* elpriser */
   .elpris-bars{ display:flex; align-items:flex-end; gap:2px; height:92px; margin:12px 0 4px; border-bottom:1px solid var(--line); padding-bottom:2px; }
   .elpris-bar-wrap{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
@@ -183,6 +189,7 @@
   }
   .sugg .name{font-weight:800; font-size:15px;}
   .sugg .ing{font-size:12.5px; color:var(--muted);}
+  .sugg .adult{font-size:12.5px; color:#8a5a00; background:#fff6e0; border:1px solid #f0e2b8; border-radius:8px; padding:5px 8px;}
   .sugg .tags{display:flex; gap:5px; flex-wrap:wrap;}
   .sugg .tag{font-size:11.5px; font-weight:700; background:#eef3ea; color:#4a7c3f; border-radius:999px; padding:2px 9px;}
   .sugg .row{display:flex; gap:6px; flex-wrap:wrap; margin-top:auto;}
@@ -304,22 +311,22 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 
 /* ================= Förslag (inbyggda) ================= */
 const SUGGESTED_MEALS = [
-  {id:'sm01', emoji:'🍝', name:'Spaghetti & köttfärssås', ing:['köttfärs','spaghetti','krossade tomater','gul lök','vitlök','tomatpuré']},
-  {id:'sm02', emoji:'🌮', name:'Tacos', ing:['köttfärs','tacokrydda','tortillabröd','tomat','gurka','majs','riven ost','gräddfil']},
-  {id:'sm03', emoji:'🥞', name:'Pannkakor', ing:['ägg','mjölk','vetemjöl','smör','sylt']},
-  {id:'sm04', emoji:'🍲', name:'Korv stroganoff', ing:['falukorv','gul lök','tomatpuré','matlagningsgrädde','ris']},
-  {id:'sm05', emoji:'🐟', name:'Fiskpinnar med mos', ing:['fiskpinnar','potatismos','ärtor','citron']},
-  {id:'sm06', emoji:'🍛', name:'Kycklinggryta med ris', ing:['kycklingfilé','matlagningsgrädde','paprika','kycklingbuljong','ris']},
-  {id:'sm07', emoji:'🧆', name:'Köttbullar & makaroner', ing:['köttbullar','makaroner','ketchup','gurka']},
-  {id:'sm08', emoji:'🧀', name:'Falukorv i ugn', ing:['falukorv','tomatpuré','riven ost','ris']},
-  {id:'sm09', emoji:'🥘', name:'Lasagne', ing:['köttfärs','lasagneplattor','krossade tomater','crème fraiche','riven ost']},
-  {id:'sm10', emoji:'🍅', name:'Tomatsoppa med grillost', ing:['krossade tomater','grädde','grönsaksbuljong','halloumi','bröd']},
-  {id:'sm11', emoji:'🍳', name:'Pytt i panna', ing:['pytt i panna (fryst)','ägg','rödbetor']},
-  {id:'sm12', emoji:'🌯', name:'Kycklingfajitas', ing:['kycklingfilé','fajitakrydda','paprika','rödlök','tortillabröd','crème fraiche']},
-  {id:'sm13', emoji:'🐠', name:'Lax i ugn', ing:['laxfilé','potatis','citron','crème fraiche','dill']},
-  {id:'sm14', emoji:'🥓', name:'Ugnspannkaka', ing:['ägg','mjölk','vetemjöl','bacon','lingonsylt']},
-  {id:'sm15', emoji:'🥟', name:'Tortellini med pesto', ing:['färsk tortellini','pesto','körsbärstomater','riven parmesan']},
-  {id:'sm16', emoji:'🍕', name:'Fredagspizza', ing:['pizzabotten','tomatsås','riven ost','skinka','majs']}
+  {id:'sm01', emoji:'🍝', name:'Spaghetti & köttfärssås', ing:['köttfärs','spaghetti','krossade tomater','gul lök','vitlök','tomatpuré'], adult:'chiliflakes, en skvätt rödvin i såsen & riven parmesan'},
+  {id:'sm02', emoji:'🌮', name:'Tacos', ing:['köttfärs','tacokrydda','tortillabröd','tomat','gurka','majs','riven ost','gräddfil'], adult:'jalapeños, het salsa & färsk koriander'},
+  {id:'sm03', emoji:'🥞', name:'Pannkakor', ing:['ägg','mjölk','vetemjöl','smör','sylt'], adult:'löjrom, crème fraiche & hackad rödlök på din'},
+  {id:'sm04', emoji:'🍲', name:'Korv stroganoff', ing:['falukorv','gul lök','tomatpuré','matlagningsgrädde','ris'], adult:'dijonsenap & rökt paprikapulver i såsen'},
+  {id:'sm05', emoji:'🐟', name:'Fiskpinnar med mos', ing:['fiskpinnar','potatismos','ärtor','citron'], adult:'remouladsås, kapris & massor av citron'},
+  {id:'sm06', emoji:'🍛', name:'Kycklinggryta med ris', ing:['kycklingfilé','matlagningsgrädde','paprika','kycklingbuljong','ris'], adult:'en skvätt vitt vin & färsk timjan i grytan'},
+  {id:'sm07', emoji:'🧆', name:'Köttbullar & makaroner', ing:['köttbullar','makaroner','ketchup','gurka'], adult:'brynt smör, lingonsylt & riktig pressgurka'},
+  {id:'sm08', emoji:'🧀', name:'Falukorv i ugn', ing:['falukorv','tomatpuré','riven ost','ris'], adult:'dijonsenap under osten & syltlök till'},
+  {id:'sm09', emoji:'🥘', name:'Lasagne', ing:['köttfärs','lasagneplattor','krossade tomater','crème fraiche','riven ost'], adult:'rödvin i köttfärssåsen & ruccolasallad med balsamico'},
+  {id:'sm10', emoji:'🍅', name:'Tomatsoppa med grillost', ing:['krossade tomater','grädde','grönsaksbuljong','halloumi','bröd'], adult:'chiliflakes, färsk basilika & en klick pesto'},
+  {id:'sm11', emoji:'🍳', name:'Pytt i panna', ing:['pytt i panna (fryst)','ägg','rödbetor'], adult:'kapris, Worcestershiresås & rinnig äggula'},
+  {id:'sm12', emoji:'🌯', name:'Kycklingfajitas', ing:['kycklingfilé','fajitakrydda','paprika','rödlök','tortillabröd','crème fraiche'], adult:'guacamole med extra chili, lime & koriander'},
+  {id:'sm13', emoji:'🐠', name:'Lax i ugn', ing:['laxfilé','potatis','citron','crème fraiche','dill'], adult:'kapris & vitvinssås istället för crème fraiche'},
+  {id:'sm14', emoji:'🥓', name:'Ugnspannkaka', ing:['ägg','mjölk','vetemjöl','bacon','lingonsylt'], adult:'stekt lök, grovkornig senap & svartpeppar'},
+  {id:'sm15', emoji:'🥟', name:'Tortellini med pesto', ing:['färsk tortellini','pesto','körsbärstomater','riven parmesan'], adult:'chiliflakes, ruccola & rostade pinjenötter'},
+  {id:'sm16', emoji:'🍕', name:'Fredagspizza', ing:['pizzabotten','tomatsås','riven ost','skinka','majs'], adult:'kronärtskocka, oliver & chiliolja på din halva'}
 ];
 
 const SUGGESTED_ACTIVITIES = [
@@ -354,6 +361,14 @@ const DEFAULT_CLEANING = [
   {id:'dc10', name:'Byt sängkläder', day:5},
   {id:'dc11', name:'Töm alla papperskorgar', day:6},
   {id:'dc12', name:'Planera veckan (5 min)', day:6}
+];
+
+/* Förslagsbank i redigeringsläget – vanliga sysslor att lägga till med ett tryck */
+const CLEANING_BANK = [
+  'Moppa golven', 'Torka dammet', 'Rensa kylskåpet', 'Putsa speglar & fönster',
+  'Städa barnens rum (tillsammans)', 'Vattna blommorna', 'Sortera post & papper',
+  'Rensa hallen', 'Torka av spisen', 'Diska undan helt', 'Vika & lägga in tvätt',
+  'Skura toaletten', 'Dammsuga bilen', 'Panta burkar & lämna återvinning'
 ];
 
 const KID_COLORS = ['#e17055','#0984e3','#00b894','#e84393','#f39c12','#6c5ce7'];
@@ -714,7 +729,7 @@ const App = {
     else if(val === '__current'){ /* behåll nuvarande egna middag */ }
     else {
       const m = getMeal(val);
-      if(m) state.mealPlan[ds] = { name: m.name, emoji: m.emoji };
+      if(m) state.mealPlan[ds] = { name: m.name, emoji: m.emoji, adult: m.adult || '' };
     }
     save(); renderAll();
     this.openDay(ds);
@@ -768,7 +783,7 @@ const App = {
     if(p.type === 'meal'){
       const m = getMeal(p.ref);
       if(m){
-        state.mealPlan[ds] = { name: m.name, emoji: m.emoji };
+        state.mealPlan[ds] = { name: m.name, emoji: m.emoji, adult: m.adult || '' };
         toast(m.emoji + ' ' + m.name + ' planerad ' + shortDate(d));
       }
     } else if(p.type === 'act'){
@@ -797,11 +812,14 @@ const App = {
   addCustomMeal(){
     const nameEl = document.getElementById('newMealName');
     const ingEl = document.getElementById('newMealIng');
+    const adultEl = document.getElementById('newMealAdult');
     const name = (nameEl.value || '').trim();
     if(!name){ toast('Skriv ett namn på maträtten först'); return; }
     const ing = (ingEl.value || '').split(',').map(s => s.trim()).filter(Boolean);
-    state.customMeals.push({ id: 'cm' + uid(), emoji: '⭐', name: name, ing: ing });
+    const adult = (adultEl && adultEl.value || '').trim();
+    state.customMeals.push({ id: 'cm' + uid(), emoji: '⭐', name: name, ing: ing, adult: adult });
     nameEl.value = ''; ingEl.value = '';
+    if(adultEl) adultEl.value = '';
     save(); renderAll();
     toast('⭐ ' + name + ' tillagd bland förslagen');
   },
@@ -888,6 +906,36 @@ const App = {
   cleanRemove(id){
     state.cleaningTasks = state.cleaningTasks.filter(t => t.id !== id);
     save(); renderStad(); renderToday();
+  },
+  cleanRename(id, value){
+    const t = state.cleaningTasks.find(x => x.id === id);
+    const v = (value || '').trim();
+    if(!t) return;
+    if(!v){ renderStad(); return; } /* tomt namn – återställ fältet */
+    t.name = v;
+    save(); renderToday();
+  },
+  cleanMove(id, day){
+    const t = state.cleaningTasks.find(x => x.id === id);
+    if(!t) return;
+    t.day = Number(day);
+    save(); renderStad(); renderToday();
+    toast('🧹 Flyttad till ' + WDAYS[t.day]);
+  },
+  cleanAddSuggested(i){
+    const name = CLEANING_BANK[i];
+    if(!name) return;
+    const dayEl = document.getElementById('newCleanDay');
+    const day = dayEl ? Number(dayEl.value) : 0;
+    state.cleaningTasks.push({ id: 'ct' + uid(), name: name, day: day });
+    save(); renderStad(); renderToday();
+    toast('🧹 ' + name + ' → ' + WDAYS[day]);
+  },
+  cleanReset(){
+    if(!confirm('Återställa städschemat till standardschemat? Dina egna ändringar försvinner.')) return;
+    state.cleaningTasks = DEFAULT_CLEANING.map(t => Object.assign({}, t));
+    save(); renderStad(); renderToday();
+    toast('🧹 Standardschemat är tillbaka');
   },
   setElprisDay(day){
     this.elprisDay = day;
@@ -1069,7 +1117,8 @@ function renderToday(){
   const meal = state.mealPlan[ts];
   html += '<div class="card"><h2>🍽️ Middag idag</h2>';
   if(meal){
-    html += '<p style="font-size:18px; font-weight:800; margin:4px 0 10px">' + meal.emoji + ' ' + esc(meal.name) + '</p>' +
+    html += '<p style="font-size:18px; font-weight:800; margin:4px 0 ' + (meal.adult ? '4px' : '10px') + '">' + meal.emoji + ' ' + esc(meal.name) + '</p>' +
+      (meal.adult ? '<p class="small muted" style="margin:0 0 10px">🌶️ <b>Vuxenversion:</b> ' + esc(meal.adult) + '</p>' : '') +
       '<button class="btn small subtle" onclick="App.openDay(\'' + ts + '\')">Ändra</button>';
   } else {
     html += '<p class="empty">Ingen middag planerad ännu.</p>' +
@@ -1227,6 +1276,7 @@ function renderMat(){
     '<div class="sugg">' +
     '<span class="name">' + m.emoji + ' ' + esc(m.name) + '</span>' +
     '<span class="ing">' + m.ing.map(esc).join(', ') + '</span>' +
+    (m.adult ? '<span class="adult">🌶️ <b>Vuxenversion:</b> ' + esc(m.adult) + '</span>' : '') +
     '<div class="row">' +
     '<button class="btn small ghost" onclick="App.mealToList(\'' + m.id + '\')">🛒 Till listan</button>' +
     '<button class="btn small" onclick="App.planMeal(\'' + m.id + '\')">📅 Planera</button>' +
@@ -1239,7 +1289,8 @@ function renderMat(){
     '<div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">' +
     '<p class="small" style="margin:0 0 8px; font-weight:700">⭐ Lägg till eget förslag</p>' +
     '<input type="text" id="newMealName" placeholder="Maträttens namn" style="margin-bottom:8px">' +
-    '<div class="inline-form" style="margin-top:0"><input type="text" id="newMealIng" placeholder="Ingredienser, separera med komma">' +
+    '<input type="text" id="newMealIng" placeholder="Ingredienser, separera med komma" style="margin-bottom:8px">' +
+    '<div class="inline-form" style="margin-top:0"><input type="text" id="newMealAdult" placeholder="🌶️ Vuxenversion, t.ex. chili & vin i såsen (valfritt)">' +
     '<button class="btn small" onclick="App.addCustomMeal()">Spara</button></div>' +
     '</div></div>';
 
@@ -1328,15 +1379,27 @@ function renderStad(){
     html += '<p style="margin:14px 0 2px; font-weight:800; font-size:14.5px; ' + (isToday ? 'color:var(--accent-dark)' : '') + '">' +
       cap(WDAYS[day]) + (isToday ? ' · idag' : '') + '</p>';
     if(dayTasks.length){
-      html += dayTasks.map(x =>
-        '<label class="task ' + (doneMap[x.id] ? 'done' : '') + '">' +
-        '<input type="checkbox" ' + (doneMap[x.id] ? 'checked' : '') + ' onchange="App.cleanToggle(\'' + x.id + '\')">' +
-        '<span class="txt">' + esc(x.name) + '</span>' +
-        (App.cleanEditMode ? '<button class="x" title="Ta bort" onclick="event.preventDefault();App.cleanRemove(\'' + x.id + '\')">✕</button>' : '') +
-        '</label>'
-      ).join('');
+      if(App.cleanEditMode){
+        /* redigeringsläge: byt namn, flytta till annan dag eller ta bort varje uppgift */
+        html += dayTasks.map(x =>
+          '<div class="task-edit">' +
+          '<input type="text" value="' + esc(x.name) + '" onchange="App.cleanRename(\'' + x.id + '\', this.value)">' +
+          '<select onchange="App.cleanMove(\'' + x.id + '\', this.value)" title="Flytta till annan dag">' +
+          WDAYS_SHORT.map((w, i) => '<option value="' + i + '"' + (i === x.day ? ' selected' : '') + '>' + cap(w) + '</option>').join('') +
+          '</select>' +
+          '<button class="x" title="Ta bort" onclick="App.cleanRemove(\'' + x.id + '\')">✕</button>' +
+          '</div>'
+        ).join('');
+      } else {
+        html += dayTasks.map(x =>
+          '<label class="task ' + (doneMap[x.id] ? 'done' : '') + '">' +
+          '<input type="checkbox" ' + (doneMap[x.id] ? 'checked' : '') + ' onchange="App.cleanToggle(\'' + x.id + '\')">' +
+          '<span class="txt">' + esc(x.name) + '</span>' +
+          '</label>'
+        ).join('');
+      }
     } else {
-      html += '<p class="empty" style="padding:2px">–</p>';
+      html += '<p class="empty" style="padding:2px">' + (App.cleanEditMode ? 'Ingen uppgift – vilodag 😌' : '–') + '</p>';
     }
   }
 
@@ -1347,9 +1410,17 @@ function renderStad(){
       '<div class="inline-form" style="margin-top:0">' +
       '<select id="newCleanDay">' + WDAYS.map((w, i) => '<option value="' + i + '">' + cap(w) + '</option>').join('') + '</select>' +
       '<button class="btn small" onclick="App.cleanAdd()">Lägg till</button></div>' +
-      '<button class="btn small subtle" style="margin-top:10px" onclick="App.cleanEdit()">Klar med redigering</button>';
+      '<p class="small" style="margin:14px 0 6px; font-weight:700">💡 Vanliga sysslor <span class="muted" style="font-weight:600">– tryck för att lägga på dagen vald ovan</span></p>' +
+      '<div class="filters" style="margin-bottom:0">' +
+      CLEANING_BANK.map((name, i) => '<button class="chip" onclick="App.cleanAddSuggested(' + i + ')">+ ' + esc(name) + '</button>').join('') +
+      '</div>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">' +
+      '<button class="btn small" onclick="App.cleanEdit()">✔️ Klar med redigering</button>' +
+      '<button class="btn small danger" onclick="App.cleanReset()">↺ Återställ standardschema</button>' +
+      '</div>';
   } else {
-    html += '<button class="btn small subtle" onclick="App.cleanEdit()">✏️ Redigera schemat</button>';
+    html += '<button class="btn small subtle" onclick="App.cleanEdit()">✏️ Redigera schemat</button>' +
+      '<p class="small muted" style="margin:8px 0 0">Här kan du byta namn på uppgifter, flytta dem mellan dagar, lägga till egna och ta bort sånt som inte passar er.</p>';
   }
   html += '</div></div>';
 
