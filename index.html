@@ -1026,45 +1026,30 @@ const App = {
     toast('Appen är nollställd');
   },
 
-  /* ---- Koppling till Skrivbordet ---- */
+  /* ---- Koppling till Skrivbordet & Assistenten (en och samma kod) ---- */
   kopplingSave(){
     const el = document.getElementById('kopplingInput');
-    const kod = (el.value || '').trim().toUpperCase();
-    if(!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(kod)){
-      toast('Koden ska se ut som XXXX-XXXX – kopiera den från Profil i Skrivbordet');
-      return;
-    }
-    localStorage.setItem(KOPPLING_KEY, kod);
-    kopplingStatus = 'Kopplad – hämtar resor…';
-    renderMer();
-    syncSkrivbordet(true);
-  },
-  kopplingRemove(){
-    localStorage.removeItem(KOPPLING_KEY);
-    localStorage.removeItem(SHARED_EVENTS_KEY);
-    kopplingStatus = '';
-    renderAll();
-    toast('Kopplingen är borttagen');
-  },
-
-  /* ---- Koppling till Assistenten ---- */
-  assistentSave(){
-    const el = document.getElementById('assistentInput');
     const kod = (el.value || '').trim().toUpperCase();
     if(!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(kod)){
       toast('Koden ska se ut som XXXX-XXXX – kopiera assistentkoden från Profil i Skrivbordet');
       return;
     }
+    localStorage.setItem(KOPPLING_KEY, kod);
     localStorage.setItem(ASSISTENT_KEY, kod);
-    assistentStatus = 'Kopplad – skickar upp schemat…';
+    kopplingStatus = 'Kopplad – hämtar resor…';
+    assistentStatus = 'Skickar upp schemat…';
     renderMer();
+    syncSkrivbordet(true);
     syncAssistentUpp(true);
   },
-  assistentRemove(){
+  kopplingRemove(){
+    localStorage.removeItem(KOPPLING_KEY);
     localStorage.removeItem(ASSISTENT_KEY);
+    localStorage.removeItem(SHARED_EVENTS_KEY);
+    kopplingStatus = '';
     assistentStatus = '';
-    renderMer();
-    toast('Assistent-kopplingen är borttagen');
+    renderAll();
+    toast('Kopplingen är borttagen');
   },
 
   closeModal(){
@@ -1539,39 +1524,22 @@ function renderMer(){
   }
   html += '</div>';
 
-  /* Koppling till Skrivbordet */
-  const kopplad = !!localStorage.getItem(KOPPLING_KEY);
-  html += '<div class="card"><h2>🧳 Jobbresor från Skrivbordet</h2>';
+  /* Koppling till Skrivbordet & Assistenten — en och samma assistentkod */
+  const kopplad = !!(localStorage.getItem(KOPPLING_KEY) || localStorage.getItem(ASSISTENT_KEY));
+  html += '<div class="card"><h2>🔗 Skrivbordet & Assistenten</h2>';
   if(kopplad){
     html += '<p class="small" style="margin-top:0">' + esc(kopplingStatus || '✅ Kopplad.') + '</p>' +
-      '<p class="small muted">Jobbresor du lägger in i Skrivbordet visas med 🧳 i kalendern här. Uppdateras automatiskt.</p>' +
+      (assistentStatus ? '<p class="small" style="margin-top:0">' + esc(assistentStatus) + '</p>' : '') +
+      '<p class="small muted">Jobbresor från Skrivbordet visas med 🧳 i kalendern, och barnens dagar, gympadagar och matplanen skickas till din assistent så morgonbriefen vet hur er vecka ser ut. Allt uppdateras automatiskt.</p>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
-      '<button class="btn small ghost" onclick="syncSkrivbordet(true)">🔄 Hämta nu</button>' +
+      '<button class="btn small ghost" onclick="syncSkrivbordet(true);syncAssistentUpp(true)">🔄 Synka nu</button>' +
       '<button class="btn small danger" onclick="App.kopplingRemove()">Ta bort kopplingen</button>' +
       '</div>';
   } else {
-    html += '<p class="small muted">Har du appen <b>Skrivbordet</b>? Skapa en kopplingskod under <b>Profil</b> där och klistra in den här, så visas dina jobbresor med 🧳 i kalendern.</p>' +
+    html += '<p class="small muted">Skapa en <b>assistentkod</b> under <b>Profil</b> i Skrivbordet och klistra in den här — då visas dina jobbresor med 🧳 i kalendern och din assistent känner till barnens schema.</p>' +
       (kopplingStatus ? '<p class="small">' + esc(kopplingStatus) + '</p>' : '') +
       '<div class="inline-form"><input type="text" id="kopplingInput" placeholder="XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" onkeydown="if(event.key===\'Enter\')App.kopplingSave()">' +
       '<button class="btn small" onclick="App.kopplingSave()">Koppla</button></div>';
-  }
-  html += '</div>';
-
-  /* Koppling till Assistenten */
-  const assistentKopplad = !!localStorage.getItem(ASSISTENT_KEY);
-  html += '<div class="card"><h2>🤝 Assistenten</h2>';
-  if(assistentKopplad){
-    html += '<p class="small" style="margin-top:0">' + esc(assistentStatus || '✅ Kopplad.') + '</p>' +
-      '<p class="small muted">Barnens dagar, gympadagar och matplanen skickas till din assistent, så morgonbriefen vet hur er vecka ser ut. Uppdateras automatiskt när du ändrar något.</p>' +
-      '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
-      '<button class="btn small ghost" onclick="syncAssistentUpp(true)">🔄 Skicka nu</button>' +
-      '<button class="btn small danger" onclick="App.assistentRemove()">Ta bort kopplingen</button>' +
-      '</div>';
-  } else {
-    html += '<p class="small muted">Har du appen <b>Assistenten</b>? Skapa en assistentkod under <b>Profil</b> i Skrivbordet och klistra in den här, så känner din assistent till barnens schema.</p>' +
-      (assistentStatus ? '<p class="small">' + esc(assistentStatus) + '</p>' : '') +
-      '<div class="inline-form"><input type="text" id="assistentInput" placeholder="XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" onkeydown="if(event.key===\'Enter\')App.assistentSave()">' +
-      '<button class="btn small" onclick="App.assistentSave()">Koppla</button></div>';
   }
   html += '</div>';
 
@@ -1800,8 +1768,14 @@ syncReminderDataToIDB();
 App.go('idag');
 checkNotifications();
 loadElpriser();
+/* en kod till allt: ligger koden bara i den ena nyckeln, kopiera till den andra */
+(function(){
+  const k1 = localStorage.getItem(KOPPLING_KEY), k2 = localStorage.getItem(ASSISTENT_KEY);
+  if(k1 && !k2) localStorage.setItem(ASSISTENT_KEY, k1);
+  if(k2 && !k1) localStorage.setItem(KOPPLING_KEY, k2);
+})();
 syncSkrivbordet(true);
-syncAssistentUpp();
+syncAssistentUpp(true);
 
 let lastDay = fmtDate(todayDate());
 setInterval(() => {
