@@ -131,6 +131,14 @@
   .bar{height:10px; background:#f1e9dc; border-radius:999px; overflow:hidden; margin:8px 0 4px;}
   .bar .fill{height:100%; background:var(--green); border-radius:999px; transition:width .3s ease;}
 
+  /* städschema: Kevin-tips */
+  .tipbtn{background:none; border:none; font-size:16px; cursor:pointer; padding:2px 6px; flex-shrink:0; opacity:.8;}
+  .tipbtn:active{transform:scale(1.15);}
+  .tipbox{
+    background:#eef7f0; border:1px solid #cfe6d4; border-radius:10px;
+    padding:8px 11px; margin:2px 0 8px; font-size:13px; line-height:1.5;
+  }
+
   /* städschema: redigeringsläge */
   .task-edit{display:flex; align-items:center; gap:6px; padding:4px 0;}
   .task-edit input[type=text]{flex:1; min-width:0; min-height:38px; padding:7px 10px; font-size:14px;}
@@ -373,8 +381,40 @@ const CLEANING_BANK = [
   'Moppa golven', 'Torka dammet', 'Rensa kylskåpet', 'Putsa speglar & fönster',
   'Städa barnens rum (tillsammans)', 'Vattna blommorna', 'Sortera post & papper',
   'Rensa hallen', 'Torka av spisen', 'Diska undan helt', 'Vika & lägga in tvätt',
-  'Skura toaletten', 'Dammsuga bilen', 'Panta burkar & lämna återvinning'
+  'Skura toaletten', 'Dammsuga bilen', 'Panta burkar & lämna återvinning',
+  'Avkalka vattenkokaren', 'Torka strömbrytare & handtag', 'Rengör diskhon ordentligt'
 ];
+
+/* Metodtips inspirerade av Städ-Kevin (Kevin Florström): rätt medel för rätt
+   smuts, låt medlet verka, microfiberduk, uppifrån och ner, lite varje dag.
+   Egna formuleringar – matchas mot uppgiftens namn. Ordningen spelar roll:
+   mer specifika nyckelord ligger före generella (t.ex. 'dammsug' före 'damm'). */
+const KEVIN_TIPS = [
+  { match:['kylskåp'], tip:'Töm en hylla i taget. Diska hyllor och lådor med vanligt diskmedel, torka torrt med microfiberduk innan allt ställs tillbaka – och passa på att slänga sånt som gått ut.' },
+  { match:['dammsug'], tip:'Plocka upp från golvet först, dammsug sedan i lugna överlappande drag. Ta lister och under möblerna varannan gång, och byt till borstmunstycke på trägolv.' },
+  { match:['damm'], tip:'Uppifrån och ner: hyllor före golv. En lätt fuktad microfiberduk fångar dammet istället för att virvla runt det – dammvippan funkar fint till snabbrundan.' },
+  { match:['badrum','toalett','wc'], tip:'Spraya kalklösande rengöring och låt medlet verka medan du gör annat – det är medlet som ska jobba, inte armen. Toaletten sist: medel under kanten, låt verka, borsta. Avsluta med spegeln och rena handdukar.' },
+  { match:['spis','köksbänk','matbord'], tip:'Fett löses med diskmedel eller fettlösare – kalkmedel biter inte på fett. Låt medlet verka en stund på spisen, torka sedan med microfiberduk och varmt vatten.' },
+  { match:['sängkläder','lakan'], tip:'Tvätta lakan och örngott i 60 grader. Låt madrassen vädra medan tvätten går, och dammsug den gärna någon gång i månaden.' },
+  { match:['handduk'], tip:'60 grader och inget sköljmedel – det täpper till fibrerna så handdukarna suger sämre. Låt dem torka helt innan de viks.' },
+  { match:['tvätt'], tip:'Töm maskinen direkt när den är klar så slipper du unken lukt. Skaka plaggen innan de hängs och lämna luckan på glänt efteråt.' },
+  { match:['spegl','fönster'], tip:'Microfiberduk och lite vatten räcker oftast. Torka efter med torr duk i S-drag så slipper du ränder.' },
+  { match:['moppa','golv'], tip:'Dammsug alltid innan du moppar. Vrid ur moppen ordentligt – golvet ska vara torrt inom någon minut. Såpa på trägolv, allrengöring på klinker.' },
+  { match:['snabbplock','plock'], tip:'Sätt en timer på 10 minuter, ta en korg och gå rum för rum – allt som ligger fel åker i korgen och delas ut på slutet. Musik på gör det roligare!' },
+  { match:['papperskorg','sopor','återvinning','panta'], tip:'Töm allt på samma runda. Torka ur kärlen med allrengöring om det behövs och sätt i nya påsar direkt.' },
+  { match:['hall'], tip:'Skor i par, jackor på krokar och torka golvet där gruset samlas. En "vet-inte-var-det-ska"-låda som töms en gång i veckan gör underverk.' },
+  { match:['barnens rum','barnrum'], tip:'Gör det tillsammans och gör det kort: en påse för skräp, en korg för tvätt, en låda för leksaker. Timer på 15 minuter och musik på.' },
+  { match:['vattenkokare','avkalka'], tip:'Fyll med hälften vatten, hälften ättika, koka upp och låt stå tio minuter. Skölj noga. Kalk är syrans jobb – inte diskmedlets.' },
+  { match:['strömbrytare','handtag'], tip:'Lätt fuktad microfiberduk med en droppe diskmedel på strömbrytare, handtag och lådknoppar – ytorna alla tar i men ingen tänker på.' },
+  { match:['väskor','fickor'], tip:'Töm väskor och fickor över en bricka så tappas inget bort. Papper i återvinningen direkt, viktiga lappar på en bestämd plats.' },
+  { match:['planera'], tip:'Fem minuter med kalendern: nästa veckas middagar, tvättdagar och vem som hämtar när. Skriv ner det – huvudet ska slippa komma ihåg.' },
+  { match:['disk'], tip:'Diska direkt efter maten – fem minuter nu slår tjugo imorgon. Fastbrända kastruller får stå i blöt med varmt vatten och diskmedel.' }
+];
+function kevinTipFor(name){
+  const n = (name || '').toLowerCase();
+  for(const t of KEVIN_TIPS){ if(t.match.some(k => n.includes(k))) return t.tip; }
+  return null;
+}
 
 const KID_COLORS = ['#e17055','#0984e3','#00b894','#e84393','#f39c12','#6c5ce7'];
 
@@ -393,7 +433,8 @@ function defaultState(){
     cleaningTasks: [],     /* {id, name, day:0..6} */
     cleaningDone: {},      /* {'YYYY-Wnn': {taskId:true}} */
     notified: {},          /* {key: 'YYYY-MM-DD'} */
-    elprisCache: {}        /* {'elpris-YYYY-MM-DD-SE4': {fetched, hours:[{startIso, sek}]}} */
+    elprisCache: {},       /* {'elpris-YYYY-MM-DD-SE4': {fetched, hours:[{startIso, sek}]}} */
+    hemStatus: null        /* {datum, sammanfattning, uppgifter:[{namn,tid,tips}]} – bara text, aldrig bilder */
   };
 }
 
@@ -948,6 +989,73 @@ const App = {
     renderStad();
     loadElpriser();
   },
+  toggleTip(id){
+    this._openTip = this._openTip === id ? null : id;
+    renderStad(); renderToday();
+  },
+
+  /* ---- Läget hemma (bildanalys – bilderna sparas aldrig) ---- */
+  async hemAnalys(input){
+    const files = Array.from(input.files || []).slice(0, 3);
+    input.value = '';
+    if(!files.length) return;
+    const kod = localStorage.getItem(ASSISTENT_KEY) || localStorage.getItem(KOPPLING_KEY);
+    if(!kod){ toast('Lägg in assistentkoden under Mer först'); return; }
+    this._hemBusy = true; renderStad();
+    try{
+      /* krymp bilderna i webbläsaren – originalen lämnar aldrig telefonen */
+      let images = [];
+      for(const f of files) images.push(await shrinkImage(f, 900, 0.6));
+      if(images.reduce((a, b) => a + b.length, 0) > 280000){
+        images = [];
+        for(const f of files) images.push(await shrinkImage(f, 640, 0.5));
+      }
+      const content = images.map(data => ({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data: data } }));
+      content.push({ type:'text', text: HEM_PROMPT });
+      const res = await fetch(ASSISTENT_API, {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ kod: kod, ai:{ system: HEM_SYSTEM, max_tokens: 900, messages:[{ role:'user', content: content }] } })
+      });
+      const data = await res.json();
+      if(!res.ok){
+        const msg = data && (data.message
+          || (data.error && data.error.message)
+          || (typeof data.error === 'string' ? data.error : ''));
+        throw new Error(/credit balance/i.test(msg || '')
+          ? 'AI-kontots kredit är slut – fyll på under Plans & Billing på console.anthropic.com'
+          : (msg || 'Något gick fel vid analysen'));
+      }
+      const m = String(data.text || '').match(/\{[\s\S]*\}/);
+      if(!m) throw new Error('Oväntat svar från analysen – prova igen');
+      const parsed = JSON.parse(m[0]);
+      state.hemStatus = {
+        datum: fmtDate(todayDate()),
+        sammanfattning: String(parsed.sammanfattning || 'Analys klar!').slice(0, 400),
+        uppgifter: (Array.isArray(parsed.uppgifter) ? parsed.uppgifter : []).slice(0, 6).map(u => ({
+          namn: String(u.namn || '').slice(0, 80),
+          tid: String(u.tid || '').slice(0, 24),
+          tips: String(u.tips || '').slice(0, 300)
+        })).filter(u => u.namn)
+      };
+      save();
+      toast('🧡 Analysen är klar – bilderna sparades inte');
+    }catch(e){
+      toast('⚠️ ' + (e && e.message ? e.message : 'Kunde inte analysera bilderna'));
+    }
+    this._hemBusy = false;
+    renderStad();
+  },
+  hemAddTask(i){
+    const u = state.hemStatus && state.hemStatus.uppgifter && state.hemStatus.uppgifter[i];
+    if(!u) return;
+    state.cleaningTasks.push({ id: 'ct' + uid(), name: u.namn, day: wIdx(todayDate()) });
+    save(); renderStad(); renderToday();
+    toast('🧹 ' + u.namn + ' – tillagd på idag');
+  },
+  hemClear(){
+    state.hemStatus = null;
+    save(); renderStad();
+  },
 
   /* ---- Barn & gympa ---- */
   childAdd(){
@@ -1187,7 +1295,10 @@ function renderToday(){
     html += todayTasks.map(x =>
       '<label class="task ' + (doneMap[x.id] ? 'done' : '') + '">' +
       '<input type="checkbox" ' + (doneMap[x.id] ? 'checked' : '') + ' onchange="App.cleanToggle(\'' + x.id + '\')">' +
-      '<span class="txt">' + esc(x.name) + '</span></label>'
+      '<span class="txt">' + esc(x.name) + '</span>' +
+      tipBtnHtml(x) +
+      '</label>' +
+      tipBoxHtml(x)
     ).join('');
     if(doneCount === todayTasks.length){
       html += '<p class="small" style="color:var(--green); font-weight:800; margin:8px 0 0">🎉 Allt klart för idag!</p>';
@@ -1393,6 +1504,78 @@ function renderAkt(){
   document.getElementById('view-akt').innerHTML = html;
 }
 
+/* ---- Städ: Kevin-tips & bildanalys ---- */
+function tipBtnHtml(task){
+  const tip = kevinTipFor(task.name);
+  if(!tip) return '';
+  return '<button class="tipbtn" title="' + esc(tip) + '" ' +
+    'onclick="event.preventDefault();event.stopPropagation();App.toggleTip(\'' + task.id + '\')">🧽</button>';
+}
+function tipBoxHtml(task){
+  if(App._openTip !== task.id) return '';
+  const tip = kevinTipFor(task.name);
+  if(!tip) return '';
+  return '<div class="tipbox">🧽 <b>Så här gör du:</b> ' + esc(tip) + '</div>';
+}
+
+/* Krymper en bild i webbläsaren till liten JPEG (base64) – originalet
+   lämnar aldrig enheten och ingenting av bilden sparas någonstans. */
+function shrinkImage(file, maxSide, quality){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Kunde inte läsa bilden')); };
+    img.src = url;
+  });
+}
+
+const HEM_SYSTEM = 'Du är en varm och peppig städcoach inspirerad av Städ-Kevins (Kevin Florström) metoder: ' +
+  'rätt medel för rätt smuts, låt medlet verka, microfiberduk, uppifrån och ner, lite varje dag – och absolut ingen skam. ' +
+  'Användaren är ensamstående förälder med ADD: svara kort, konkret och uppmuntrande, aldrig dömande.';
+const HEM_PROMPT = 'Här är bilder på hur mitt hem ser ut just nu. Titta på dem och svara ENBART med JSON i exakt detta format, utan text före eller efter: ' +
+  '{"sammanfattning": "1-2 uppmuntrande meningar om läget", "uppgifter": [{"namn": "kort uppgiftsnamn", "tid": "ca X min", "tips": "en mening om hur jag gör det smartast"}]}. ' +
+  'Max 5 uppgifter, den som ger störst skillnad först. Föreslå bara sådant som faktiskt syns på bilderna.';
+
+function renderHemCard(){
+  const kod = localStorage.getItem(ASSISTENT_KEY) || localStorage.getItem(KOPPLING_KEY);
+  let html = '<div class="card"><h2>📸 Läget hemma just nu</h2>';
+  if(!kod){
+    html += '<p class="small muted">Ta 1–3 bilder på hemmet så tittar din städcoach på dem och föreslår vad som ger mest effekt just nu. ' +
+      'Funktionen använder assistentkoden – lägg in den under <b>Mer</b> först.</p>' +
+      '<button class="btn small ghost" onclick="App.go(\'mer\')">⚙️ Till Mer</button>';
+    return html + '</div>';
+  }
+  html += '<p class="small muted" style="margin-top:0">Ta 1–3 bilder på hur det ser ut. Bilderna analyseras direkt och <b>sparas aldrig</b> – bara råden här nedanför sparas.</p>';
+  if(App._hemBusy){
+    html += '<p class="small" style="font-weight:800">🔍 Tittar på bilderna… det tar några sekunder.</p>';
+  } else {
+    html += '<label class="btn full" style="cursor:pointer">📸 Ta eller välj bilder' +
+      '<input type="file" accept="image/*" multiple style="display:none" onchange="App.hemAnalys(this)"></label>';
+  }
+  const hs = state.hemStatus;
+  if(hs){
+    html += '<div class="tipbox" style="margin-top:12px">🧡 ' + esc(hs.sammanfattning) +
+      ' <span class="muted">(' + esc(hs.datum) + ')</span></div>';
+    html += (hs.uppgifter || []).map((u, i) =>
+      '<div class="task"><span class="txt"><b>' + esc(u.namn) + '</b>' +
+      (u.tid ? ' <span class="muted small">· ' + esc(u.tid) + '</span>' : '') +
+      (u.tips ? '<br><span class="small muted">🧽 ' + esc(u.tips) + '</span>' : '') + '</span>' +
+      '<button class="btn small ghost" title="Lägg till i dagens städlista" onclick="App.hemAddTask(' + i + ')">➕</button></div>'
+    ).join('');
+    html += '<button class="btn small subtle" style="margin-top:10px" onclick="App.hemClear()">Rensa analysen</button>';
+  }
+  return html + '</div>';
+}
+
 /* ---- Städ ---- */
 function renderStad(){
   const t = todayDate();
@@ -1407,7 +1590,8 @@ function renderStad(){
   html += '<div class="card">' +
     '<h2>🧹 Veckans städning <span class="sub">v.' + isoWeekInfo(t).week + '</span></h2>' +
     '<div class="bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
-    '<p class="small muted" style="margin:0 0 6px">' + doneCount + ' av ' + tasks.length + ' klara · listan nollställs varje måndag</p>';
+    '<p class="small muted" style="margin:0 0 6px">' + doneCount + ' av ' + tasks.length + ' klara · listan nollställs varje måndag</p>' +
+    '<p class="small muted" style="margin:0 0 6px">Inspirerat av <b>Städ-Kevins</b> (Kevin Florström) sätt att städa: lite varje dag, rätt medel för rätt smuts och låt medlet göra jobbet. Tryck på 🧽 vid en uppgift för hur du gör.</p>';
 
   for(let day = 0; day < 7; day++){
     const dayTasks = tasks.filter(x => x.day === day);
@@ -1432,7 +1616,9 @@ function renderStad(){
           '<label class="task ' + (doneMap[x.id] ? 'done' : '') + '">' +
           '<input type="checkbox" ' + (doneMap[x.id] ? 'checked' : '') + ' onchange="App.cleanToggle(\'' + x.id + '\')">' +
           '<span class="txt">' + esc(x.name) + '</span>' +
-          '</label>'
+          tipBtnHtml(x) +
+          '</label>' +
+          tipBoxHtml(x)
         ).join('');
       }
     } else {
@@ -1460,6 +1646,8 @@ function renderStad(){
       '<p class="small muted" style="margin:8px 0 0">Här kan du byta namn på uppgifter, flytta dem mellan dagar, lägga till egna och ta bort sånt som inte passar er.</p>';
   }
   html += '</div></div>';
+
+  html += renderHemCard();
 
   document.getElementById('view-stad').innerHTML = html;
 }

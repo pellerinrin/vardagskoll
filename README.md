@@ -9,7 +9,7 @@ Byggd som en installerbar PWA (Progressive Web App): ingen backend, ingen databa
 - **Kalender** — markera exakt vilka dagar/veckor barnen är hos dig
 - **Mat** — matförslag med ingredienser, egna recept, inköpslista
 - **Aktivitet** — förslag på saker att göra ute/inne/gratis, planera på valfri dag
-- **Städ** — veckoschema som nollställs varje måndag
+- **Städ** — veckoschema som nollställs varje måndag, inspirerat av Städ-Kevins (Kevin Florström) metoder med 🧽-tips per uppgift, plus "Läget hemma": ta tillfälliga bilder som AI-analyseras via Skrivbordets `/api/assistent` (bilderna sparas aldrig, bara råden)
 - **Gympapåminnelser** — lägg in vilka dagar barnen har gympa, få påminnelse 1 och 2 dagar innan
 - **Installerbar** — lägg till på hemskärmen så fungerar den som en riktig app, även offline
 
