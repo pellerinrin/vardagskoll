@@ -418,6 +418,7 @@ function save(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
   catch(e){ toast('⚠️ Kunde inte spara – kontrollera lagringsutrymmet'); }
   syncReminderDataToIDB();
+  scheduleAssistentSync();
 }
 
 /* ================= Gemensamt ================= */
@@ -1025,6 +1026,47 @@ const App = {
     toast('Appen är nollställd');
   },
 
+  /* ---- Koppling till Skrivbordet ---- */
+  kopplingSave(){
+    const el = document.getElementById('kopplingInput');
+    const kod = (el.value || '').trim().toUpperCase();
+    if(!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(kod)){
+      toast('Koden ska se ut som XXXX-XXXX – kopiera den från Profil i Skrivbordet');
+      return;
+    }
+    localStorage.setItem(KOPPLING_KEY, kod);
+    kopplingStatus = 'Kopplad – hämtar resor…';
+    renderMer();
+    syncSkrivbordet(true);
+  },
+  kopplingRemove(){
+    localStorage.removeItem(KOPPLING_KEY);
+    localStorage.removeItem(SHARED_EVENTS_KEY);
+    kopplingStatus = '';
+    renderAll();
+    toast('Kopplingen är borttagen');
+  },
+
+  /* ---- Koppling till Assistenten ---- */
+  assistentSave(){
+    const el = document.getElementById('assistentInput');
+    const kod = (el.value || '').trim().toUpperCase();
+    if(!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(kod)){
+      toast('Koden ska se ut som XXXX-XXXX – kopiera assistentkoden från Profil i Skrivbordet');
+      return;
+    }
+    localStorage.setItem(ASSISTENT_KEY, kod);
+    assistentStatus = 'Kopplad – skickar upp schemat…';
+    renderMer();
+    syncAssistentUpp(true);
+  },
+  assistentRemove(){
+    localStorage.removeItem(ASSISTENT_KEY);
+    assistentStatus = '';
+    renderMer();
+    toast('Assistent-kopplingen är borttagen');
+  },
+
   closeModal(){
     document.getElementById('overlay').classList.remove('open');
     this._pending = null;
@@ -1497,6 +1539,42 @@ function renderMer(){
   }
   html += '</div>';
 
+  /* Koppling till Skrivbordet */
+  const kopplad = !!localStorage.getItem(KOPPLING_KEY);
+  html += '<div class="card"><h2>🧳 Jobbresor från Skrivbordet</h2>';
+  if(kopplad){
+    html += '<p class="small" style="margin-top:0">' + esc(kopplingStatus || '✅ Kopplad.') + '</p>' +
+      '<p class="small muted">Jobbresor du lägger in i Skrivbordet visas med 🧳 i kalendern här. Uppdateras automatiskt.</p>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+      '<button class="btn small ghost" onclick="syncSkrivbordet(true)">🔄 Hämta nu</button>' +
+      '<button class="btn small danger" onclick="App.kopplingRemove()">Ta bort kopplingen</button>' +
+      '</div>';
+  } else {
+    html += '<p class="small muted">Har du appen <b>Skrivbordet</b>? Skapa en kopplingskod under <b>Profil</b> där och klistra in den här, så visas dina jobbresor med 🧳 i kalendern.</p>' +
+      (kopplingStatus ? '<p class="small">' + esc(kopplingStatus) + '</p>' : '') +
+      '<div class="inline-form"><input type="text" id="kopplingInput" placeholder="XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" onkeydown="if(event.key===\'Enter\')App.kopplingSave()">' +
+      '<button class="btn small" onclick="App.kopplingSave()">Koppla</button></div>';
+  }
+  html += '</div>';
+
+  /* Koppling till Assistenten */
+  const assistentKopplad = !!localStorage.getItem(ASSISTENT_KEY);
+  html += '<div class="card"><h2>🤝 Assistenten</h2>';
+  if(assistentKopplad){
+    html += '<p class="small" style="margin-top:0">' + esc(assistentStatus || '✅ Kopplad.') + '</p>' +
+      '<p class="small muted">Barnens dagar, gympadagar och matplanen skickas till din assistent, så morgonbriefen vet hur er vecka ser ut. Uppdateras automatiskt när du ändrar något.</p>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap">' +
+      '<button class="btn small ghost" onclick="syncAssistentUpp(true)">🔄 Skicka nu</button>' +
+      '<button class="btn small danger" onclick="App.assistentRemove()">Ta bort kopplingen</button>' +
+      '</div>';
+  } else {
+    html += '<p class="small muted">Har du appen <b>Assistenten</b>? Skapa en assistentkod under <b>Profil</b> i Skrivbordet och klistra in den här, så känner din assistent till barnens schema.</p>' +
+      (assistentStatus ? '<p class="small">' + esc(assistentStatus) + '</p>' : '') +
+      '<div class="inline-form"><input type="text" id="assistentInput" placeholder="XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" onkeydown="if(event.key===\'Enter\')App.assistentSave()">' +
+      '<button class="btn small" onclick="App.assistentSave()">Koppla</button></div>';
+  }
+  html += '</div>';
+
   /* Data */
   html += '<div class="card"><h2>💾 Din data</h2>' +
     '<p class="small muted">Allt sparas lokalt på den här enheten. Ta en säkerhetskopia ibland!</p>' +
@@ -1509,6 +1587,134 @@ function renderMer(){
   html += '<p class="center small muted">Vardagskoll 🧡 – en lugn liten app för din vardag.<br>Ett steg i taget räcker gott.</p>';
 
   document.getElementById('view-mer').innerHTML = html;
+}
+
+/* ================= Koppling till Skrivbordet ================= */
+/* Skrivbordet (skrivbordet.vercel.app) ligger på en annan domän, så
+   jobbresorna hämtas via dess delnings-API med en kopplingskod som
+   skapas under Profil i Skrivbordet. Resorna skrivs in i samma lokala
+   lagring (SHARED_EVENTS_KEY) som kalendern redan läser 🧳 från. */
+const SKRIVBORDET_API = 'https://skrivbordet.vercel.app/api/delat';
+const KOPPLING_KEY = 'vardagskoll-kopplingskod';
+let kopplingStatus = '';
+let kopplingLastSync = 0;
+
+async function syncSkrivbordet(force){
+  const kod = localStorage.getItem(KOPPLING_KEY);
+  if(!kod) return;
+  /* håll nere trafiken: högst var 5:e minut, utom vid uttrycklig begäran */
+  const now = Date.now();
+  if(!force && now - kopplingLastSync < 5 * 60 * 1000) return;
+  kopplingLastSync = now;
+
+  try{
+    const res = await fetch(SKRIVBORDET_API + '?kod=' + encodeURIComponent(kod));
+    if(res.status === 404){
+      kopplingStatus = '⚠️ Koden känns inte igen längre – kontrollera den under Profil i Skrivbordet.';
+      if(App.tab === 'mer') renderMer();
+      return;
+    }
+    if(!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    const resor = Array.isArray(data.resor) ? data.resor : [];
+
+    /* bygg om dag-för-dag-kartan från reselistan */
+    const events = {};
+    for(const r of resor){
+      if(!r.start) continue;
+      let d = parseDate(r.start);
+      const end = parseDate(r.end || r.start);
+      let guard = 0;
+      while(d <= end && guard++ < 400){
+        const ds = fmtDate(d);
+        (events[ds] = events[ds] || []).push({ type: 'jobbresa', label: r.label || 'Jobbresa', source: 'skrivbordet' });
+        d = addDays(d, 1);
+      }
+    }
+
+    const before = localStorage.getItem(SHARED_EVENTS_KEY) || '';
+    const after = JSON.stringify(events);
+    localStorage.setItem(SHARED_EVENTS_KEY, after);
+    kopplingStatus = '✅ Kopplad – ' + (resor.length ? resor.length + (resor.length === 1 ? ' resa hämtad' : ' resor hämtade') : 'inga resor inlagda ännu') + '.';
+    if(after !== before) renderAll();
+    else if(App.tab === 'mer') renderMer();
+  }catch(e){
+    /* nätverksfel: behåll senast hämtade resorna, försök igen senare */
+    kopplingStatus = '⚠️ Kunde inte nå Skrivbordet just nu – visar senast hämtade resorna.';
+    if(App.tab === 'mer') renderMer();
+  }
+}
+
+/* ================= Koppling till Assistenten ================= */
+/* Assistenten behöver känna till barnens schema för att kunna skriva
+   morgonbriefen. Med assistentkoden (skapas under Profil i Skrivbordet)
+   skickas ett litet urval upp: barnens namn och gympadagar, vilka dagar
+   barnen är hos dig, matplanen, aktiviteter och städschemat. Inget
+   hämtas hit den här vägen. */
+const ASSISTENT_API = 'https://skrivbordet.vercel.app/api/assistent';
+const ASSISTENT_KEY = 'assistent-kopplingskod';
+let assistentStatus = '';
+let assistentSenast = '';   /* JSON för senast uppskickade datat */
+let assistentTimer = null;
+let assistentLastTry = 0;
+
+function assistentPayload(){
+  const fran = fmtDate(addDays(todayDate(), -7));
+  const dagar = {};
+  for(const ds of Object.keys(state.custody)) if(ds >= fran) dagar[ds] = true;
+  const middagar = {};
+  for(const ds of Object.keys(state.mealPlan)) if(ds >= fran) middagar[ds] = state.mealPlan[ds];
+  const aktiviteter = {};
+  for(const ds of Object.keys(state.plannedActivities)) if(ds >= fran) aktiviteter[ds] = state.plannedActivities[ds];
+  return {
+    barn: state.children.map(c => ({ namn: c.name, gympa: c.gympa || [] })),
+    barnDagar: dagar,
+    middagar: middagar,
+    aktiviteter: aktiviteter,
+    stad: state.cleaningTasks.map(t => ({ namn: t.name, dag: t.day })),
+    inkopKvar: state.shopping.filter(s => !s.done).length
+  };
+}
+
+/* körs efter varje save() — samlar ihop tätt följande ändringar */
+function scheduleAssistentSync(){
+  if(!localStorage.getItem(ASSISTENT_KEY)) return;
+  clearTimeout(assistentTimer);
+  assistentTimer = setTimeout(() => syncAssistentUpp(), 4000);
+}
+
+async function syncAssistentUpp(force){
+  const kod = localStorage.getItem(ASSISTENT_KEY);
+  if(!kod) return;
+  const payload = assistentPayload();
+  const json = JSON.stringify(payload);
+  const now = Date.now();
+  if(!force && json === assistentSenast) return;               /* inget nytt */
+  if(!force && now - assistentLastTry < 60 * 1000){ scheduleAssistentSync(); return; }
+  assistentLastTry = now;
+
+  try{
+    /* tidsstämpeln läggs på efter jämförelsen, annars ser datat alltid "nytt" ut */
+    payload.uppdaterad = new Date().toISOString();
+    const res = await fetch(ASSISTENT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kod: kod, skriv: { 'assistent-vardagskoll': payload } })
+    });
+    if(res.status === 404 || res.status === 400){
+      assistentStatus = '⚠️ Assistentkoden känns inte igen – kontrollera den under Profil i Skrivbordet.';
+      if(App.tab === 'mer') renderMer();
+      return;
+    }
+    if(!res.ok) throw new Error('http ' + res.status);
+    assistentSenast = json;
+    assistentStatus = '✅ Kopplad – schemat skickades ' + new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) + '.';
+    if(App.tab === 'mer') renderMer();
+  }catch(e){
+    /* nätverksfel: försök igen vid nästa ändring eller intervall */
+    assistentStatus = '⚠️ Kunde inte nå assistenten just nu – försöker igen senare.';
+    if(App.tab === 'mer') renderMer();
+  }
 }
 
 /* ================= Notiser ================= */
@@ -1594,6 +1800,8 @@ syncReminderDataToIDB();
 App.go('idag');
 checkNotifications();
 loadElpriser();
+syncSkrivbordet(true);
+syncAssistentUpp();
 
 let lastDay = fmtDate(todayDate());
 setInterval(() => {
@@ -1601,7 +1809,14 @@ setInterval(() => {
   if(now !== lastDay){ lastDay = now; renderAll(); }
   checkNotifications();
   loadElpriser();
+  syncSkrivbordet();
+  syncAssistentUpp();
 }, 60000);
+
+/* hämta färska resor när appen kommer tillbaka i förgrunden (t.ex. på mobilen) */
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') syncSkrivbordet(true);
+});
 </script>
 </body>
 </html>
