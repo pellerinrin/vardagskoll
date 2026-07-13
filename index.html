@@ -1051,7 +1051,7 @@ const App = {
         'Max 6 förslag, mest aktuellt först.';
       const res = await fetch(ASSISTENT_API, {
         method: 'POST', headers: await authHeadersFrisk(),
-        body: JSON.stringify({ ai: { web: true, max_tokens: 1400,
+        body: JSON.stringify({ ai: { web: true, max_tokens: 5000,
           system: 'Du är en lokal aktivitetstipsare i Sverige. Svara kort, konkret och alltid på svenska.',
           messages: [{ role: 'user', content: prompt }] } })
       });
@@ -1193,7 +1193,7 @@ const App = {
       content.push({ type:'text', text: HEM_PROMPT });
       const res = await fetch(ASSISTENT_API, {
         method:'POST', headers: await authHeadersFrisk(),
-        body: JSON.stringify({ ai:{ system: HEM_SYSTEM, max_tokens: 900, messages:[{ role:'user', content: content }] } })
+        body: JSON.stringify({ ai:{ system: HEM_SYSTEM, max_tokens: 2500, messages:[{ role:'user', content: content }] } })
       });
       const data = await res.json();
       if(!res.ok){
