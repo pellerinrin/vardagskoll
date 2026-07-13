@@ -193,8 +193,14 @@
   @media (max-width:480px){ .sugg-grid{grid-template-columns:1fr;} }
   .sugg{
     border:1px solid var(--line); border-radius:12px; padding:12px; background:#fffdf9;
-    display:flex; flex-direction:column; gap:8px;
+    display:flex; flex-direction:column; gap:8px; position:relative;
   }
+  .sugg .del{
+    position:absolute; top:6px; right:8px; background:none; border:none;
+    color:#c9b8a5; font-size:14px; cursor:pointer; padding:4px 6px;
+  }
+  .sugg .del:active{color:#c0392b;}
+  .sugg .name{padding-right:22px;}
   .sugg .name{font-weight:800; font-size:15px;}
   .sugg .ing{font-size:12.5px; color:var(--muted);}
   .sugg .adult{font-size:12.5px; color:#8a5a00; background:#fff6e0; border:1px solid #f0e2b8; border-radius:8px; padding:5px 8px;}
@@ -434,7 +440,10 @@ function defaultState(){
     cleaningDone: {},      /* {'YYYY-Wnn': {taskId:true}} */
     notified: {},          /* {key: 'YYYY-MM-DD'} */
     elprisCache: {},       /* {'elpris-YYYY-MM-DD-SE4': {fetched, hours:[{startIso, sek}]}} */
-    hemStatus: null        /* {datum, sammanfattning, uppgifter:[{namn,tid,tips}]} – bara text, aldrig bilder */
+    hemStatus: null,       /* {datum, sammanfattning, uppgifter:[{namn,tid,tips}]} – bara text, aldrig bilder */
+    hiddenActivities: [],  /* id:n för inbyggda förslag användaren tagit bort */
+    ort: '',               /* hemort för lokala aktivitetsförslag */
+    webForslag: null       /* {datum, ort, veckotyp, lista:[{namn,emoji,beskrivning,tags:[]}]} */
   };
 }
 
@@ -919,6 +928,100 @@ const App = {
   removeCustomActivity(id){
     state.customActivities = state.customActivities.filter(a => a.id !== id);
     save(); renderAll();
+  },
+  hideActivity(id){
+    const a = getActivity(id);
+    if(!a) return;
+    if(!confirm('Ta bort "' + a.name + '" från förslagen? Du kan ångra dig med "Återställ borttagna förslag".')) return;
+    if(id.startsWith('ca')){
+      state.customActivities = state.customActivities.filter(x => x.id !== id);
+    } else if(!state.hiddenActivities.includes(id)){
+      state.hiddenActivities.push(id);
+    }
+    save(); renderAkt();
+    toast('Förslaget "' + a.name + '" är borttaget');
+  },
+  restoreHidden(){
+    state.hiddenActivities = [];
+    save(); renderAkt();
+    toast('Alla förslag är tillbaka');
+  },
+  setWebVecka(v){
+    this._webVecka = v;
+    renderAkt();
+  },
+
+  /* ---- Aktuella förslag från nätet (webbsökning via assistent-API:t) ---- */
+  async webForslagHamta(){
+    const ortEl = document.getElementById('ortInput');
+    const ort = (ortEl && ortEl.value || '').trim();
+    if(!ort){ toast('Skriv din ort först, t.ex. Uppsala'); return; }
+    if(ort !== state.ort){ state.ort = ort; save(); }
+    const kod = localStorage.getItem(ASSISTENT_KEY) || localStorage.getItem(KOPPLING_KEY);
+    if(!kod){ toast('Lägg in assistentkoden under Mer först'); return; }
+
+    const veckotyp = this._webVecka === 'auto' || !this._webVecka ? autoVeckotyp() : this._webVecka;
+    this._webBusy = true; renderAkt();
+    try{
+      const t = todayDate();
+      const prompt = 'Sök på webben efter vad som är aktuellt i ' + ort + ' med omnejd just nu (' +
+        humanDate(t) + ' ' + t.getFullYear() + '): evenemang, säsongsaktiviteter och bra utflykter. ' +
+        (veckotyp === 'barn'
+          ? 'Det är BARNVECKA – föreslå bara sådant som passar att göra tillsammans med barn.'
+          : 'Det är BARNFRI vecka – föreslå bara sådant som passar en vuxen på egen hand eller med vänner.') +
+        ' Svara ENBART med JSON, utan text före eller efter: ' +
+        '{"forslag":[{"namn":"kort namn","emoji":"en passande emoji","beskrivning":"en mening, gärna med plats och datum","ute":true,"gratis":false}]}. ' +
+        'Max 6 förslag, mest aktuellt först.';
+      const res = await fetch(ASSISTENT_API, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kod: kod, ai: { web: true, max_tokens: 1400,
+          system: 'Du är en lokal aktivitetstipsare i Sverige. Svara kort, konkret och alltid på svenska.',
+          messages: [{ role: 'user', content: prompt }] } })
+      });
+      const data = await res.json();
+      if(!res.ok){
+        const msg = data && (data.message || (data.error && data.error.message) || (typeof data.error === 'string' ? data.error : ''));
+        throw new Error(/credit balance/i.test(msg || '')
+          ? 'AI-kontots kredit är slut – fyll på under Plans & Billing på console.anthropic.com'
+          : (msg || 'Något gick fel vid hämtningen'));
+      }
+      const m = String(data.text || '').match(/\{[\s\S]*\}/);
+      if(!m) throw new Error('Oväntat svar – prova igen');
+      const parsed = JSON.parse(m[0]);
+      const lista = (Array.isArray(parsed.forslag) ? parsed.forslag : []).slice(0, 6).map(f => ({
+        namn: String(f.namn || '').slice(0, 80),
+        emoji: String(f.emoji || '🎈').slice(0, 4),
+        beskrivning: String(f.beskrivning || '').slice(0, 220),
+        tags: [f.ute ? 'ute' : 'inne'].concat(f.gratis ? ['gratis'] : [])
+      })).filter(f => f.namn);
+      if(!lista.length) throw new Error('Hittade inga förslag – prova en större ort i närheten');
+      state.webForslag = { datum: fmtDate(t), ort: ort, veckotyp: veckotyp, lista: lista };
+      save();
+      toast('🌍 ' + lista.length + ' förslag hämtade för ' + ort);
+    }catch(e){
+      toast('⚠️ ' + (e && e.message ? e.message : 'Kunde inte hämta förslag'));
+    }
+    this._webBusy = false;
+    renderAkt();
+  },
+  webForslagSpara(i){
+    const f = state.webForslag && state.webForslag.lista && state.webForslag.lista[i];
+    if(!f) return;
+    const exists = state.customActivities.find(a => a.name.toLowerCase() === f.namn.toLowerCase());
+    if(exists){ toast('Finns redan bland förslagen'); return exists.id; }
+    const id = 'ca' + uid();
+    state.customActivities.push({ id: id, emoji: f.emoji || '🎈', name: f.namn, tags: f.tags || [] });
+    save(); renderAkt();
+    toast('⭐ ' + f.namn + ' sparad bland förslagen');
+    return id;
+  },
+  webForslagPlanera(i){
+    const id = this.webForslagSpara(i);
+    if(id) this.planActivity(id);
+  },
+  webForslagRensa(){
+    state.webForslag = null;
+    save(); renderAkt();
   },
 
   /* ---- Städ ---- */
@@ -1446,6 +1549,59 @@ function renderMat(){
 }
 
 /* ---- Aktiviteter ---- */
+/* Barnvecka eller barnfri vecka? Räknar dagar med barnen i innevarande
+   vecka (mån–sön) — tre eller fler betyder barnvecka. */
+function autoVeckotyp(){
+  const mon = mondayOf(todayDate());
+  let n = 0;
+  for(let i = 0; i < 7; i++){ if(hasKids(fmtDate(addDays(mon, i)))) n++; }
+  return n >= 3 ? 'barn' : 'fri';
+}
+
+function renderWebForslagCard(){
+  const kod = localStorage.getItem(ASSISTENT_KEY) || localStorage.getItem(KOPPLING_KEY);
+  let html = '<div class="card"><h2>🌍 Aktuellt där du bor</h2>';
+  if(!kod){
+    html += '<p class="small muted">Hämta färska aktivitetstips från nätet – evenemang och säsongsgrejer nära dig, anpassade efter om det är barnvecka eller barnfri vecka. ' +
+      'Funktionen använder assistentkoden – lägg in den under <b>Mer</b> först.</p>' +
+      '<button class="btn small ghost" onclick="App.go(\'mer\')">⚙️ Till Mer</button>';
+    return html + '</div>';
+  }
+
+  const auto = autoVeckotyp();
+  const sel = App._webVecka || 'auto';
+  const veckoChips = [
+    ['auto', 'Auto: ' + (auto === 'barn' ? '💛 barnvecka' : '🌙 barnfri')],
+    ['barn', '💛 Barnvecka'],
+    ['fri', '🌙 Barnfri']
+  ].map(x => '<button class="chip ' + (sel === x[0] ? 'on' : '') + '" onclick="App.setWebVecka(\'' + x[0] + '\')">' + x[1] + '</button>').join('');
+
+  html += '<p class="small muted" style="margin-top:0">Söker på nätet efter evenemang och säsongstips nära dig, anpassat efter veckotyp.</p>' +
+    '<div class="inline-form" style="margin-top:0"><input type="text" id="ortInput" placeholder="Din ort, t.ex. Uppsala" value="' + esc(state.ort || '') + '">' +
+    (App._webBusy ? '' : '<button class="btn small" onclick="App.webForslagHamta()">🔍 Hämta</button>') +
+    '</div>' +
+    '<div class="filters" style="margin:10px 0 0">' + veckoChips + '</div>';
+
+  if(App._webBusy){
+    html += '<p class="small" style="font-weight:800; margin:10px 0 0">🔍 Söker och sållar… det tar ungefär en halv minut.</p>';
+  }
+
+  const wf = state.webForslag;
+  if(wf && wf.lista && wf.lista.length){
+    html += '<p class="small muted" style="margin:12px 0 4px">Hämtat ' + esc(wf.datum) + ' för <b>' + esc(wf.ort) + '</b> · ' +
+      (wf.veckotyp === 'barn' ? '💛 barnvecka' : '🌙 barnfri vecka') + '</p>';
+    html += wf.lista.map((u, i) =>
+      '<div class="task"><span class="txt"><b>' + esc(u.emoji) + ' ' + esc(u.namn) + '</b>' +
+      (u.beskrivning ? '<br><span class="small muted">' + esc(u.beskrivning) + '</span>' : '') + '</span>' +
+      '<button class="btn small ghost" title="Spara bland förslagen" onclick="App.webForslagSpara(' + i + ')">⭐</button>' +
+      '<button class="btn small" title="Planera på en dag" onclick="App.webForslagPlanera(' + i + ')">📅</button>' +
+      '</div>'
+    ).join('');
+    html += '<button class="btn small subtle" style="margin-top:10px" onclick="App.webForslagRensa()">Rensa listan</button>';
+  }
+  return html + '</div>';
+}
+
 function renderAkt(){
   const t = todayDate();
   let html = '';
@@ -1472,6 +1628,9 @@ function renderAkt(){
   }
   html += '</div>';
 
+  /* Aktuellt där du bor (webbsökning) */
+  html += renderWebForslagCard();
+
   /* Förslag med filter */
   const f = App.actFilter;
   const filters = [['alla','Alla'],['ute','🌳 Ute'],['inne','🏠 Inne'],['gratis','🆓 Gratis']];
@@ -1479,18 +1638,22 @@ function renderAkt(){
     '<button class="chip ' + (f === x[0] ? 'on' : '') + '" onclick="App.setActFilter(\'' + x[0] + '\')">' + x[1] + '</button>'
   ).join('');
 
-  const list = allActivities().filter(a => f === 'alla' || (a.tags && a.tags.includes(f)));
+  const hidden = state.hiddenActivities || [];
+  const list = allActivities()
+    .filter(a => !hidden.includes(a.id))
+    .filter(a => f === 'alla' || (a.tags && a.tags.includes(f)));
   const actCard = a =>
     '<div class="sugg">' +
+    '<button class="del" title="Ta bort förslaget" onclick="App.hideActivity(\'' + a.id + '\')">✕</button>' +
     '<span class="name">' + a.emoji + ' ' + esc(a.name) + '</span>' +
     '<span class="tags">' + (a.tags || []).map(tg => '<span class="tag">' + esc(tg) + '</span>').join('') + '</span>' +
     '<div class="row"><button class="btn small" onclick="App.planActivity(\'' + a.id + '\')">📅 Planera</button></div>' +
-    (a.id.startsWith('ca') ? '<button class="rm" onclick="App.removeCustomActivity(\'' + a.id + '\')">Ta bort förslag</button>' : '') +
     '</div>';
 
   html += '<div class="card"><h2>💡 Aktivitetsförslag</h2>' +
     '<div class="filters">' + chips + '</div>' +
     (list.length ? '<div class="sugg-grid">' + list.map(actCard).join('') + '</div>' : '<p class="empty">Inga förslag matchar filtret.</p>') +
+    (hidden.length ? '<button class="btn small subtle" style="margin-top:12px" onclick="App.restoreHidden()">↺ Återställ borttagna förslag (' + hidden.length + ')</button>' : '') +
     '<div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">' +
     '<p class="small" style="margin:0 0 8px; font-weight:700">⭐ Lägg till eget förslag</p>' +
     '<div class="inline-form" style="margin-top:0"><input type="text" id="newActName" placeholder="Aktivitetens namn">' +
