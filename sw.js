@@ -1,7 +1,7 @@
 /* Service worker för Vardagskoll — gör appen installerbar och offline-bar. */
 importScripts('./shared.js?v=3');
 
-const CACHE_VERSION = 'vardagskoll-v6';
+const CACHE_VERSION = 'vardagskoll-v7';
 const APP_SHELL = [
   './',
   './index.html',
@@ -12,11 +12,17 @@ const APP_SHELL = [
   './icon-maskable-512.png',
   './apple-touch-icon.png'
 ];
+/* inloggningsbiblioteket, bästa-möjliga-försök (får inte stoppa
+   installationen om CDN:et krånglar just då) */
+const EXTRA_SHELL = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(APP_SHELL))
+      .then(cache => cache.addAll(APP_SHELL)
+        .then(() => Promise.all(EXTRA_SHELL.map(u => cache.add(u).catch(() => {})))))
       .then(() => self.skipWaiting())
   );
 });
@@ -34,6 +40,24 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if(event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+
+  /* inloggningsbiblioteket: cache först, så det funkar offline med en
+     redan aktiv session — nätet uppdaterar cachen i bakgrunden */
+  if(EXTRA_SHELL.includes(event.request.url)){
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        const fetchPromise = fetch(event.request)
+          .then(res => {
+            if(res && res.ok) caches.open(CACHE_VERSION).then(c => c.put(event.request, res.clone()));
+            return res;
+          })
+          .catch(() => cached);
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
   if(url.origin !== location.origin) return;
 
   event.respondWith(
