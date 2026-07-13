@@ -1,7 +1,7 @@
 /* Service worker för Vardagskoll — gör appen installerbar och offline-bar. */
 importScripts('./shared.js?v=3');
 
-const CACHE_VERSION = 'vardagskoll-v7';
+const CACHE_VERSION = 'vardagskoll-v8';
 const APP_SHELL = [
   './',
   './index.html',

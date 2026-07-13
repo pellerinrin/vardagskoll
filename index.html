@@ -450,6 +450,22 @@ function authHeaders(extra){
   if(accessToken()) h.Authorization = 'Bearer ' + accessToken();
   return h;
 }
+/* Hämtar en giltig token inför ett anrop — Supabase-klienten förnyar en
+   token som håller på att gå ut. Utan detta skulle ett anrop efter att
+   appen legat i bakgrunden kunna falla på en utgången token (401). */
+async function friskToken(){
+  try{
+    const { data } = await sb.auth.getSession();
+    if(data && data.session){ session = data.session; return data.session.access_token; }
+  }catch(e){}
+  return accessToken();
+}
+async function authHeadersFrisk(extra){
+  const token = await friskToken();
+  const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+  if(token) h.Authorization = 'Bearer ' + token;
+  return h;
+}
 
 /* ================= State ================= */
 const LS_KEY = 'vardagskoll-v1';
@@ -1034,7 +1050,7 @@ const App = {
         '{"forslag":[{"namn":"kort namn","emoji":"en passande emoji","beskrivning":"en mening, gärna med plats och datum","ute":true,"gratis":false}]}. ' +
         'Max 6 förslag, mest aktuellt först.';
       const res = await fetch(ASSISTENT_API, {
-        method: 'POST', headers: authHeaders(),
+        method: 'POST', headers: await authHeadersFrisk(),
         body: JSON.stringify({ ai: { web: true, max_tokens: 1400,
           system: 'Du är en lokal aktivitetstipsare i Sverige. Svara kort, konkret och alltid på svenska.',
           messages: [{ role: 'user', content: prompt }] } })
@@ -1176,7 +1192,7 @@ const App = {
       const content = images.map(data => ({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data: data } }));
       content.push({ type:'text', text: HEM_PROMPT });
       const res = await fetch(ASSISTENT_API, {
-        method:'POST', headers: authHeaders(),
+        method:'POST', headers: await authHeadersFrisk(),
         body: JSON.stringify({ ai:{ system: HEM_SYSTEM, max_tokens: 900, messages:[{ role:'user', content: content }] } })
       });
       const data = await res.json();
@@ -1646,7 +1662,8 @@ async function hamtaProfilKontext(){
   const now = Date.now();
   if(App._profilKontext != null && (now - (App._profilKontextTid || 0)) < 10 * 60 * 1000) return App._profilKontext;
   try{
-    const res = await fetch(ASSISTENT_API, { headers: authHeaders() });
+    const token = await friskToken();
+    const res = await fetch(ASSISTENT_API, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
     if(!res.ok) return App._profilKontext || '';
     const d = await res.json();
     const bitar = [];
