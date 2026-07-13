@@ -470,6 +470,7 @@ function defaultState(){
     hemStatus: null,       /* {datum, sammanfattning, uppgifter:[{namn,tid,tips}]} – bara text, aldrig bilder */
     hiddenActivities: [],  /* id:n för inbyggda förslag användaren tagit bort */
     ort: '',               /* hemort för lokala aktivitetsförslag */
+    intressen: [],         /* egna intressen inför barnfria förslag – ligger kvar */
     webForslag: null       /* {datum, ort, veckotyp, lista:[{namn,emoji,beskrivning,tags:[]}]} */
   };
 }
@@ -979,6 +980,26 @@ const App = {
   },
 
   /* ---- Aktuella förslag från nätet (webbsökning via assistent-API:t) ---- */
+  toggleIntresse(namn){
+    const i = state.intressen.indexOf(namn);
+    if(i >= 0) state.intressen.splice(i, 1);
+    else state.intressen.push(namn);
+    save(); renderAkt();
+  },
+  addIntresse(){
+    const el = document.getElementById('intresseInput');
+    /* rensa tecken som annars bryter onclick-attributen (', ", <, >, \) */
+    const v = (el && el.value || '').replace(/["'<>\\]/g, '').trim().slice(0, 40);
+    if(!v) return;
+    if(!state.intressen.some(x => x.toLowerCase() === v.toLowerCase())) state.intressen.push(v);
+    if(el) el.value = '';
+    save(); renderAkt();
+  },
+  removeIntresse(namn){
+    state.intressen = state.intressen.filter(x => x !== namn);
+    save(); renderAkt();
+  },
+
   async webForslagHamta(){
     const ortEl = document.getElementById('ortInput');
     const ort = (ortEl && ortEl.value || '').trim();
@@ -990,11 +1011,25 @@ const App = {
     this._webBusy = true; renderAkt();
     try{
       const t = todayDate();
+      let personligt = '';
+      if(veckotyp === 'fri'){
+        /* barnfria förslag anpassas efter egna intressen + vad Assistenten/
+           Skrivbordet vet om användarens behov och intressen */
+        if(state.intressen.length){
+          personligt += ' Användarens intressen: ' + state.intressen.join(', ') +
+            '. Prioritera förslag som matchar dessa.';
+        }
+        const kontext = await hamtaProfilKontext();
+        if(kontext){
+          personligt += ' Det här vet jag om användaren från hennes assistent – väg in behov och intressen (men lägg dig inte i det som är privat):\n' + kontext;
+        }
+      }
       const prompt = 'Sök på webben efter vad som är aktuellt i ' + ort + ' med omnejd just nu (' +
         humanDate(t) + ' ' + t.getFullYear() + '): evenemang, säsongsaktiviteter och bra utflykter. ' +
         (veckotyp === 'barn'
           ? 'Det är BARNVECKA – föreslå bara sådant som passar att göra tillsammans med barn.'
           : 'Det är BARNFRI vecka – föreslå bara sådant som passar en vuxen på egen hand eller med vänner.') +
+        personligt +
         ' Svara ENBART med JSON, utan text före eller efter: ' +
         '{"forslag":[{"namn":"kort namn","emoji":"en passande emoji","beskrivning":"en mening, gärna med plats och datum","ute":true,"gratis":false}]}. ' +
         'Max 6 förslag, mest aktuellt först.';
@@ -1594,6 +1629,42 @@ function autoVeckotyp(){
   return n >= 3 ? 'barn' : 'fri';
 }
 
+/* Vanliga vuxenintressen att bocka i inför barnfria förslag */
+const INTRESSE_BANK = [
+  'Träning & motion', 'Natur & friluft', 'Kultur & konst', 'Musik & konsert',
+  'Mat & restaurang', 'Café & fika', 'Film & bio', 'Böcker & bibliotek',
+  'Umgås med vänner', 'Spa & återhämtning', 'Yoga & mindfulness', 'Dans',
+  'Shopping', 'Loppis & antikt', 'Skapa & pyssla', 'Lära något nytt',
+  'Historia & museer', 'Foto'
+];
+
+/* Hämtar en kort textbild av användarens behov/intressen från Assistenten
+   & Skrivbordet (profil, lär-känna-utlåtanden, öppna bevakningar). Cachas
+   i minnet ~10 min så vi inte anropar API:t i onödan. */
+async function hamtaProfilKontext(){
+  if(!session) return '';
+  const now = Date.now();
+  if(App._profilKontext != null && (now - (App._profilKontextTid || 0)) < 10 * 60 * 1000) return App._profilKontext;
+  try{
+    const res = await fetch(ASSISTENT_API, { headers: authHeaders() });
+    if(!res.ok) return App._profilKontext || '';
+    const d = await res.json();
+    const bitar = [];
+    const profil = d && d.profil && d.profil.text;
+    if(profil) bitar.push('Om användaren: ' + String(profil).slice(0, 900));
+    const iv = (d && d.intervjuer) || {};
+    const utl = ['halsa', 'varderingar', 'karriar']
+      .map(k => iv[k] && iv[k].utlatande).filter(Boolean).join(' ');
+    if(utl) bitar.push('Värderingar & behov: ' + utl.slice(0, 600));
+    const poster = Array.isArray(d && d.poster) ? d.poster : [];
+    const oppna = poster.filter(p => p && !p.klar).map(p => p.text).filter(Boolean).slice(0, 8);
+    if(oppna.length) bitar.push('Aktuellt hon har på gång: ' + oppna.join('; ').slice(0, 400));
+    App._profilKontext = bitar.join('\n');
+    App._profilKontextTid = now;
+    return App._profilKontext;
+  }catch(e){ return App._profilKontext || ''; }
+}
+
 function renderWebForslagCard(){
   let html = '<div class="card"><h2>🌍 Aktuellt där du bor</h2>';
   if(!session){
@@ -1616,6 +1687,29 @@ function renderWebForslagCard(){
     (App._webBusy ? '' : '<button class="btn small" onclick="App.webForslagHamta()">🔍 Hämta</button>') +
     '</div>' +
     '<div class="filters" style="margin:10px 0 0">' + veckoChips + '</div>';
+
+  /* Intresseformulär – bara för barnfria förslag; valen ligger kvar till nästa gång */
+  const effektivVecka = sel === 'auto' ? auto : sel;
+  if(effektivVecka === 'fri'){
+    const valda = state.intressen || [];
+    const bankChips = INTRESSE_BANK.map(namn =>
+      '<button class="chip ' + (valda.includes(namn) ? 'on' : '') + '" onclick="App.toggleIntresse(\'' + namn.replace(/'/g, "\\'") + '\')">' +
+      (valda.includes(namn) ? '✓ ' : '') + esc(namn) + '</button>').join('');
+    const egna = valda.filter(x => !INTRESSE_BANK.includes(x));
+    html += '<div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">' +
+      '<p class="small" style="margin:0 0 8px; font-weight:700">🌙 Dina intressen <span class="muted" style="font-weight:600">– för barnfria förslag, sparas till nästa gång</span></p>' +
+      '<div class="filters" style="margin-bottom:0">' + bankChips + '</div>';
+    if(egna.length){
+      html += '<div class="filters" style="margin:8px 0 0">' +
+        egna.map(namn => '<span class="chip on" style="cursor:default">' + esc(namn) +
+          ' <span style="cursor:pointer" onclick="App.removeIntresse(\'' + namn.replace(/'/g, "\\'") + '\')">✕</span></span>').join('') +
+        '</div>';
+    }
+    html += '<div class="inline-form"><input type="text" id="intresseInput" placeholder="Lägg till eget intresse…" onkeydown="if(event.key===\'Enter\')App.addIntresse()">' +
+      '<button class="btn small" onclick="App.addIntresse()">Lägg till</button></div>' +
+      '<p class="small muted" style="margin:8px 0 0">💡 Appen väger även in vad din assistent vet om dina behov och intressen.</p>' +
+      '</div>';
+  }
 
   if(App._webBusy){
     html += '<p class="small" style="font-weight:800; margin:10px 0 0">🔍 Söker och sållar… det tar ungefär en halv minut.</p>';
