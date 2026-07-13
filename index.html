@@ -431,7 +431,15 @@ const KID_COLORS = ['#e17055','#0984e3','#00b894','#e84393','#f39c12','#6c5ce7']
    GitHub Pages-ursprung, så en inloggning gäller automatiskt i båda. */
 const SUPABASE_URL = 'https://sqhpkzkkveqvkqmohzpc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_s02x24M_xX4MHdqcU7ncYQ_T9ctHXKZ';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* Supabase laddas från en CDN (annat ursprung, cachas inte av service workern).
+   Om skriptet inte hunnit laddas (offline/blockerat) ska appen ändå fungera –
+   inloggning kräver ändå nätverk – istället för att bli blank. */
+let sb = null;
+try{
+  if(window.supabase && window.supabase.createClient){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}catch(e){ sb = null; }
 
 let session = null; /* null = utloggad (eller inte klar ännu) */
 let authFel = '';
@@ -1260,6 +1268,7 @@ const App = {
     const passEl = document.getElementById('authPass');
     const email = ((emailEl && emailEl.value) || '').trim();
     const pass = (passEl && passEl.value) || '';
+    if(!sb){ authFel = 'Ingen internetanslutning – logga in när du är uppkopplad igen.'; authMsg = ''; renderMer(); return; }
     if(!email || !pass){ authFel = 'Fyll i både e-post och lösenord.'; authMsg = ''; renderMer(); return; }
     authFel = ''; authMsg = 'Loggar in…';
     renderMer();
@@ -1272,6 +1281,7 @@ const App = {
     const passEl = document.getElementById('authPass');
     const email = ((emailEl && emailEl.value) || '').trim();
     const pass = (passEl && passEl.value) || '';
+    if(!sb){ authFel = 'Ingen internetanslutning – försök igen när du är uppkopplad.'; authMsg = ''; renderMer(); return; }
     if(!email || !pass || pass.length < 6){ authFel = 'E-post och ett lösenord (minst 6 tecken).'; authMsg = ''; renderMer(); return; }
     authFel = ''; authMsg = 'Skapar konto…';
     renderMer();
@@ -1282,7 +1292,7 @@ const App = {
     renderMer();
   },
   async loggaUt(){
-    await sb.auth.signOut();
+    if(sb) await sb.auth.signOut();
     localStorage.removeItem(SHARED_EVENTS_KEY);
     kopplingStatus = '';
     assistentStatus = '';
@@ -2146,18 +2156,20 @@ App.go('idag');
 checkNotifications();
 loadElpriser();
 
-sb.auth.getSession().then(({ data }) => {
-  session = data.session || null;
-  if(App.tab === 'mer') renderMer();
-  if(session){ syncSkrivbordet(true); syncAssistentUpp(true); }
-});
-sb.auth.onAuthStateChange((_event, sess) => {
-  const varInloggad = !!session;
-  session = sess || null;
-  authFel = ''; authMsg = '';
-  renderAll();
-  if(session && !varInloggad){ syncSkrivbordet(true); syncAssistentUpp(true); }
-});
+if(sb){
+  sb.auth.getSession().then(({ data }) => {
+    session = data.session || null;
+    if(App.tab === 'mer') renderMer();
+    if(session){ syncSkrivbordet(true); syncAssistentUpp(true); }
+  });
+  sb.auth.onAuthStateChange((_event, sess) => {
+    const varInloggad = !!session;
+    session = sess || null;
+    authFel = ''; authMsg = '';
+    renderAll();
+    if(session && !varInloggad){ syncSkrivbordet(true); syncAssistentUpp(true); }
+  });
+}
 
 let lastDay = fmtDate(todayDate());
 setInterval(() => {
