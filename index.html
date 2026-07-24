@@ -185,6 +185,9 @@
   .cell .marks{display:flex; flex-wrap:wrap; gap:3px; align-items:center; margin-top:auto;}
   .cell .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
   .cell .mk{font-size:10px; line-height:1;}
+  .cell .spanbars{position:absolute; left:4px; right:4px; bottom:3px; display:flex; flex-direction:column; gap:1.5px;}
+  .cell .spanbar{height:3px; border-radius:2px;}
+  .cell.hasspan{padding-bottom:9px;}
   .legend{display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; font-size:13px; color:var(--muted);}
   .legend span{display:inline-flex; align-items:center; gap:5px;}
   .legend .dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
@@ -487,7 +490,8 @@ function defaultState(){
     hiddenActivities: [],  /* id:n för inbyggda förslag användaren tagit bort */
     ort: '',               /* hemort för lokala aktivitetsförslag */
     intressen: [],         /* egna intressen inför barnfria förslag – ligger kvar */
-    webForslag: null       /* {datum, ort, veckotyp, lista:[{namn,emoji,beskrivning,tags:[]}]} */
+    webForslag: null,      /* {datum, ort, veckotyp, lista:[{namn,emoji,beskrivning,tags:[]}]} */
+    spanEvents: []         /* egna flerdagarsperioder: {id, label, emoji, color, start, end} */
   };
 }
 
@@ -521,6 +525,19 @@ function getMeal(ref){ return allMeals().find(m => m.id === ref) || null; }
 function allActivities(){ return SUGGESTED_ACTIVITIES.concat(state.customActivities); }
 function getActivity(ref){ return allActivities().find(a => a.id === ref) || null; }
 function hasKids(ds){ return !!state.custody[ds]; }
+
+/* Egna flerdagarsperioder (t.ex. "Bortrest") som täcker ett datumspann.
+   Datumsträngar YYYY-MM-DD jämförs direkt som text. */
+const SPAN_PRESETS = [
+  { label: 'Bortrest', emoji: '✈️', color: '#7048e8' },
+  { label: 'Semester', emoji: '🏖️', color: '#f76707' },
+  { label: 'Ledig', emoji: '🌿', color: '#2f9e44' },
+  { label: 'Sjuk', emoji: '🤒', color: '#e03131' },
+  { label: 'Jobbar', emoji: '💼', color: '#1971c2' }
+];
+function spanEventsOn(ds){
+  return (state.spanEvents || []).filter(e => ds >= e.start && ds <= e.end);
+}
 
 /* Håller IndexedDB i synk med barn/gympa-schema och skickade notiser,
    så att service workerns bakgrundskontroll (best effort) ser samma data. */
@@ -746,6 +763,92 @@ const App = {
     toast(allSet ? 'Vecka ' + w + ' avmarkerad' : '💛 Vecka ' + w + ': barnen hos dig');
   },
 
+  /* ---- Flerdagarsperioder (t.ex. Bortrest) ---- */
+  _readPeriod(){
+    const l = document.getElementById('periodLabel'); if(l) this._pLabel = l.value;
+    const s = document.getElementById('periodStart'); if(s) this._pStart = s.value;
+    const e = document.getElementById('periodEnd'); if(e) this._pEnd = e.value;
+  },
+  openPeriod(prefillStart){
+    if(prefillStart){ this._pStart = prefillStart; if(!this._pEnd || this._pEnd < prefillStart) this._pEnd = prefillStart; }
+    if(this._pStart == null) this._pStart = fmtDate(todayDate());
+    if(this._pEnd == null) this._pEnd = this._pStart;
+    if(this._pLabel == null) this._pLabel = '';
+    const emoji = this._pEmoji || '📌', color = this._pColor || '#7048e8';
+    const presetChips = SPAN_PRESETS.map((p, i) =>
+      '<button class="chip ' + (this._pEmoji === p.emoji && this._pColor === p.color ? 'on' : '') + '" ' +
+      'onclick="App.periodPreset(' + i + ')">' + p.emoji + ' ' + esc(p.label) + '</button>').join('');
+    openModal(
+      '<div class="sheet-head"><h3>📌 Lägg till period</h3>' +
+      '<button class="close" onclick="App.closePeriod()">✕</button></div>' +
+      '<div class="sheet-sec"><h4>Vad gäller det?</h4>' +
+      '<div class="filters" style="margin-bottom:10px">' + presetChips + '</div>' +
+      '<div class="inline-form" style="margin-top:0">' +
+      '<span style="font-size:22px; align-self:center">' + emoji + '</span>' +
+      '<input type="text" id="periodLabel" placeholder="t.ex. Bortrest" value="' + esc(this._pLabel) + '"></div>' +
+      '</div>' +
+      '<div class="sheet-sec"><h4>När?</h4>' +
+      '<div class="filters" style="margin-bottom:10px">' +
+      '<button class="chip" onclick="App.periodWeek(0)">Hela denna vecka</button>' +
+      '<button class="chip" onclick="App.periodWeek(1)">Hela nästa vecka</button></div>' +
+      '<label class="small muted">Från</label>' +
+      '<input type="date" id="periodStart" value="' + this._pStart + '" style="margin:2px 0 8px" onchange="App.periodSync()">' +
+      '<label class="small muted">Till och med</label>' +
+      '<input type="date" id="periodEnd" value="' + this._pEnd + '" style="margin:2px 0 0">' +
+      '</div>' +
+      '<button class="btn full" onclick="App.savePeriod()">Spara perioden</button>'
+    );
+  },
+  periodPreset(i){
+    this._readPeriod();
+    const p = SPAN_PRESETS[i];
+    this._pEmoji = p.emoji; this._pColor = p.color;
+    if(!(this._pLabel || '').trim()) this._pLabel = p.label;
+    this.openPeriod();
+  },
+  periodWeek(offset){
+    this._readPeriod();
+    const mon = mondayOf(addDays(todayDate(), offset * 7));
+    this._pStart = fmtDate(mon);
+    this._pEnd = fmtDate(addDays(mon, 6));
+    this.openPeriod();
+  },
+  periodSync(){
+    /* om slutdatum är före startdatum, flytta med det */
+    const s = document.getElementById('periodStart'), e = document.getElementById('periodEnd');
+    if(s && e && e.value < s.value) e.value = s.value;
+  },
+  savePeriod(){
+    this._readPeriod();
+    const label = (this._pLabel || '').trim();
+    let s = this._pStart, e = this._pEnd;
+    if(!label){ toast('Skriv vad perioden gäller, t.ex. Bortrest'); return; }
+    if(!s || !e){ toast('Välj både start- och slutdatum'); return; }
+    if(s > e){ const tmp = s; s = e; e = tmp; }
+    state.spanEvents.push({
+      id: 'sp' + uid(), label: label.slice(0, 60),
+      emoji: this._pEmoji || '📌', color: this._pColor || '#7048e8', start: s, end: e
+    });
+    save();
+    this._pLabel = null; this._pStart = null; this._pEnd = null; this._pEmoji = null; this._pColor = null;
+    this.closeModal();
+    renderAll();
+    const dagar = Math.round((parseDate(e) - parseDate(s)) / 86400000) + 1;
+    toast('📌 ' + label + ' – ' + dagar + (dagar > 1 ? ' dagar' : ' dag') + ' inlagt');
+  },
+  closePeriod(){
+    this._pLabel = null; this._pStart = null; this._pEnd = null; this._pEmoji = null; this._pColor = null;
+    this.closeModal();
+  },
+  removeSpan(id, reopenDs){
+    const sp = (state.spanEvents || []).find(x => x.id === id);
+    if(!sp) return;
+    if(!confirm('Ta bort perioden "' + sp.label + '"?')) return;
+    state.spanEvents = state.spanEvents.filter(x => x.id !== id);
+    save(); renderAll();
+    if(reopenDs && document.getElementById('overlay').classList.contains('open')) this.openDay(reopenDs);
+  },
+
   /* ---- Dagvy (modal) ---- */
   openDay(ds){
     const d = parseDate(ds);
@@ -796,6 +899,16 @@ const App = {
         '<p class="small muted" style="margin:6px 0 0">Läggs till/ändras i Skrivbordet.</p></div>'
       : '';
 
+    const spans = spanEventsOn(ds);
+    const spanInfo = '<div class="sheet-sec"><h4>📌 Perioder</h4>' +
+      (spans.length
+        ? spans.map(e => '<div class="task"><span class="txt">' + e.emoji + ' <b>' + esc(e.label) + '</b>' +
+            '<br><span class="small muted">' + shortDate(parseDate(e.start)) + ' – ' + shortDate(parseDate(e.end)) + '</span></span>' +
+            '<button class="x" title="Ta bort perioden" onclick="App.removeSpan(\'' + e.id + '\',\'' + ds + '\')">✕</button></div>').join('')
+        : '<div class="empty">Ingen period den här dagen.</div>') +
+      '<button class="btn small ghost" style="margin-top:8px" onclick="App.openPeriod(\'' + ds + '\')">➕ Ny period från denna dag</button>' +
+      '</div>';
+
     openModal(
       '<div class="sheet-head"><h3>' + humanDate(d) + ' · v.' + isoWeekInfo(d).week + '</h3>' +
       '<button class="close" onclick="App.closeModal()">✕</button></div>' +
@@ -821,6 +934,7 @@ const App = {
       '</div>' +
 
       tripInfo +
+      spanInfo +
       cleanInfo
     );
   },
@@ -1530,6 +1644,8 @@ function renderCal(){
       if(hasKids(ds)) classes.push('custody');
       const onTrip = sharedEventsOn(ds).some(e => e.type === 'jobbresa');
       if(onTrip) classes.push('jobbresa');
+      const spans = spanEventsOn(ds);
+      if(spans.length) classes.push('hasspan');
       if(ds === ts) classes.push('today');
       let marks = '';
       const wd = wIdx(d);
@@ -1539,17 +1655,21 @@ function renderCal(){
       if(state.mealPlan[ds]) marks += '<span class="mk" title="Middag planerad">🍽️</span>';
       if(state.plannedActivities[ds] && state.plannedActivities[ds].length) marks += '<span class="mk" title="Aktivitet planerad">🎈</span>';
       if(onTrip) marks += '<span class="mk" title="Jobbresa (från Skrivbordet)">🧳</span>';
+      for(const e of spans) marks += '<span class="mk" title="' + esc(e.label) + '">' + e.emoji + '</span>';
+      const spanBars = spans.length
+        ? '<span class="spanbars">' + spans.slice(0, 3).map(e => '<span class="spanbar" style="background:' + e.color + '"></span>').join('') + '</span>'
+        : '';
       grid += '<button class="' + classes.join(' ') + '" onclick="App.openDay(\'' + ds + '\')">' +
         (hasKids(ds) ? '<span class="heart">💛</span>' : '') +
         '<span class="num">' + d.getDate() + '</span>' +
-        '<span class="marks">' + marks + '</span></button>';
+        '<span class="marks">' + marks + '</span>' + spanBars + '</button>';
       d = addDays(d, 1);
     }
   }
   grid += '</div>';
 
   let legend = '<div class="legend">' +
-    '<span>💛 barnen hos dig</span><span>🍽️ middag</span><span>🎈 aktivitet</span><span>🧳 jobbresa (Skrivbordet)</span>';
+    '<span>💛 barnen hos dig</span><span>🍽️ middag</span><span>🎈 aktivitet</span><span>🧳 jobbresa (Skrivbordet)</span><span>📌 egen period</span>';
   for(const c of state.children){
     if(c.gympa && c.gympa.length) legend += '<span><span class="dot" style="background:' + c.color + '"></span>' + esc(c.name) + 's gympa</span>';
   }
@@ -1565,8 +1685,9 @@ function renderCal(){
     '<button class="btn small subtle" onclick="App.calShift(1)">›</button>' +
     '</div></div>' +
     grid + legend +
+    '<button class="btn small ghost full" style="margin-top:12px" onclick="App.openPeriod()">📌 Lägg till period (flera dagar)</button>' +
     '<p class="small muted" style="margin-bottom:0">Tryck på en <b>dag</b> för detaljer och för att markera att du har barnen. ' +
-    'Tryck på ett <b>veckonummer</b> för att markera hela veckan på en gång.</p>' +
+    'Tryck på ett <b>veckonummer</b> för att markera hela veckan. Lägg in t.ex. <b>Bortrest</b> eller <b>Semester</b> över flera dagar med knappen ovan.</p>' +
     '</div>';
 }
 
